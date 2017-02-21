@@ -20,7 +20,7 @@ from keras.layers.convolutional import Convolution2D as Conv2d
 
 
 class Agent(object):
-    def __init__(self, STATE_DIM, ACTION_DIM, BATCH_BOOL, BATCH_SIZE, TAU, GAMMA, LEARNING_RATE, NOISE_SCALE, ITERATION):
+    def __init__(self, STATE_DIM, ACTION_DIM, BATCH_BOOL, BATCH_SIZE, TAU, GAMMA, LEARNING_RATE, NOISE_SCALE, ITERATION, INITIAL_REPLAY_SIZE):
         self.state_dim = STATE_DIM
         self.action_dim = ACTION_DIM
         self.batch_normalization = BATCH_BOOL
@@ -30,16 +30,15 @@ class Agent(object):
         self.learning_rate=LEARNING_RATE
         self.noise_scale = NOISE_SCALE
         self.iteration = ITERATION
+        self.initial_replay_size=INITIAL_REPLAY_SIZE
         self.W_regularizer = l2()
         self.W_constraint = unitnorm()
         self.replay_memory = deque()
-
 
         self.x, self.u, self.mu, self.v, self.q, self.p, self.a, self.q_network = self.build_network()
         self.tx, self.tu, self.tmu, self.tv, self.tq, self.tp, self.ta, self.target_q_network = self.build_network()
 
         self.sess = tf.InteractiveSession()
-
 
     def _L(self, x):
         """
@@ -65,10 +64,10 @@ class Agent(object):
         target = tf.reshape(target, (self.batch_size, n, n))
         return target
 
-    def _P(self,x):
-        return tf.matmul(x,tf.transpose(x, perm=[0,2,1]))
+    def _P(self, x):
+        return tf.matmul(x, tf.transpose(x, perm=[0, 2, 1]))
 
-    def _A(self,t):
+    def _A(self, t):
         m, p, u = t
         #d = tf.expand_dims(u - m, -1)
         d = u - m
@@ -77,7 +76,6 @@ class Agent(object):
     def _Q(self,t):
         v, a = t
         return v + a
-
 
     def build_network(self):
         x = Input(shape=self.state_dim, name='state')
@@ -104,11 +102,11 @@ class Agent(object):
         a = merge([mu, p, u], mode=self._A, output_shape=(None, self.action_dim,), name="a")
         q = merge([v, a], mode=self._Q, output_shape=(None, self.action_dim,), name="q")
 
-        model = Model(input=[x,u], output=q)
+        model = Model(input=[x, u], output=q)
         adam = Adam(lr=self.learning_rate)
         model.compile(loss='mse', optimizer=adam)
 
-        return x,u,mu,v,q,p,a, model
+        return x, u, mu, v, q, p, a, model
 
     def update_t(self):
         q_weights = self.q_network.get_weights()
@@ -140,6 +138,9 @@ class Agent(object):
 
         self.update_t()
 
+    def get_initial_state(self):
+        pass
+
     def learn(self):
         state_batch = []
         action_batch = []
@@ -166,6 +167,3 @@ class Agent(object):
             np.float32(np.array(state_batch)),
             np.float32(np.array(action_batch))], y_batch
         )
-
-
-
