@@ -20,14 +20,16 @@ from keras.layers.convolutional import Convolution2D as Conv2d
 
 
 class Agent(object):
-    def __init__(self, STATE_DIM, ACTION_DIM, BATCH_BOOL, BATCH_SIZE, TAU, LEARNING_RATE, NOISE_SCALE):
+    def __init__(self, STATE_DIM, ACTION_DIM, BATCH_BOOL, BATCH_SIZE, TAU, GAMMA, LEARNING_RATE, NOISE_SCALE, ITERATION):
         self.state_dim = STATE_DIM
         self.action_dim = ACTION_DIM
         self.batch_normalization = BATCH_BOOL
         self.batch_size = BATCH_SIZE
         self.tau = TAU
+        self.gamma = GAMMA
         self.learning_rate=LEARNING_RATE
         self.noise_scale = NOISE_SCALE
+        self.iteration = ITERATION
         self.W_regularizer = l2()
         self.W_constraint = unitnorm()
         self.replay_memory = deque()
@@ -133,10 +135,37 @@ class Agent(object):
         self.replay_memory.append((state, action, reward, terminal, next_state))
 
         if len(self.replay_memory) >= self.initial_replay_size:
-            self.learn()
+            for i in range(self.iteration):
+                self.learn()
 
         self.update_t()
 
+    def learn(self):
+        state_batch = []
+        action_batch = []
+        reward_batch = []
+        terminal_batch = []
+        next_state_batch = []
+
+        minibatch = random.sample(self.replay_memory, self.batch_size)
+
+        for data in minibatch:
+            state_batch.append(data[0])
+            action_batch.append(data[1])
+            reward_batch.append(data[2])
+            terminal_batch.append(data[3])
+            next_state_batch.append(data[4])
+
+        target_value_batch = self.sess.run(self.tv, feed_dict={
+            self.tx: np.float32(np.array(next_state_batch))
+        })
+
+        y_batch = np.float32(np.array(reward_batch) + self.gamma * target_value_batch)
+
+        loss = self.q_network.train_on_batch([
+            np.float32(np.array(state_batch)),
+            np.float32(np.array(action_batch))], y_batch
+        )
 
 
 
