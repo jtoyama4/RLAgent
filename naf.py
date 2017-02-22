@@ -1,8 +1,6 @@
-from Arm import Arm
-from Agent_ddpg import Agent
+from Agent_naf import Agent
 import gym
 import numpy as np
-import rospy
 import sys
 import argparse
 
@@ -11,14 +9,14 @@ def play(gym_mode):
     BUFFER_SIZE = 500000
     GAMMA = 0.99
     TAU = 0.001
-    LEARNING_RATE = 0.001
+    LEARNING_RATE = 0.0001
     ACTION_DIM = 1
     STATE_DIM = 3
     NUM_EPISODES = 3000
-    INITIAL_REPLAY_SIZE = 20000
+    INITIAL_REPLAY_SIZE = 100
     BATCH_SIZE = 32
     NOISE_SCALE=0.01
-    ITERATION = 10
+    ITERATION = 3
     BATCH_BOOL = True
 
     np.random.seed(1234)
@@ -28,6 +26,7 @@ def play(gym_mode):
         env = gym.make("Pendulum-v0")
         # env.monitor.start("pendulum-home", force=True)
     else:
+        from Arm import Arm
         env = Arm()
 
     for _ in xrange(NUM_EPISODES):
@@ -42,10 +41,9 @@ def play(gym_mode):
             agent.run(state, action, reward, terminal, next_state)
             t += 1
 
-            if t == 300:
+        if not gym_mode:
+            if rospy.is_shutdown():
                 break
-        if rospy.is_shutdown():
-            break
 
 
 if __name__ == '__main__':
@@ -53,7 +51,11 @@ if __name__ == '__main__':
     parser.add_argument('--gym', action='store_true', default=False)
     args = parser.parse_args()
     gym_mode = args.gym
-    try:
+    if gym_mode:
         play(gym_mode)
-    except rospy.ROSInterruptException:
-        pass
+    else:
+        import rospy
+        try:
+            play(gym_mode)
+        except rospy.ROSInterruptException:
+            pass

@@ -32,14 +32,16 @@ class Agent(object):
         self.iteration = ITERATION
         self.initial_replay_size=INITIAL_REPLAY_SIZE
         self.W_regularizer = l2()
-        self.W_constraint = unitnorm()
+        self.W_constraint = maxnorm(2)
         self.replay_memory = deque()
 
         self.x, self.u, self.mu, self.v, self.q, self.p, self.a, self.q_network = self.build_network()
         self.tx, self.tu, self.tmu, self.tv, self.tq, self.tp, self.ta, self.target_q_network = self.build_network()
 
+        self.target_q_network.set_weights(self.q_network.get_weights())
         self.sess = tf.InteractiveSession()
-
+        tf.initialize_all_variables().run()
+        
     def _L(self, x):
         """
                 :param x: a tensor with shape (batch_size, n*(n+1)/2)
@@ -88,54 +90,54 @@ class Agent(object):
         return v + a
 
     def build_network(self):
-        x = Input(shape=self.state_dim, name='state')
-        u = Input(shape=self.action_dim, name='action')
+        x = Input(shape=(self.state_dim,), name='state')
+        u = Input(shape=(self.action_dim,), name='action')
         if self.batch_normalization:
             h = BatchNormalization()(x)
         else:
             h = x
-        h = Dense(200, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
-        h = Dense(200, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
+        h = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
+        h = BatchNormalization()(h)
+        h = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
+        
         mu = Dense(self.action_dim)(h)
-
-        #h_v = Dense(200, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
-        #h_v = Dense(200, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_v)
         v = Dense(1,W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
-
-        #h_l0 = Dense(200, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
-        #h_l0 = Dense(200, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_l0)
         l0 = Dense(self.action_dim * (self.action_dim + 1) / 2, name='l0',
                    W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
 
         l = Lambda(self._L, output_shape=(self.action_dim, self.action_dim), name='l')(l0)
         p = Lambda(self._P, output_shape=(self.action_dim, self.action_dim), name='p')(l)
-        a = merge([mu, p, u], mode=self._A, output_shape=(None, self.action_dim,), name="a")
-        q = merge([v, a], mode=self._Q, output_shape=(None, self.action_dim,), name="q")
+        a = merge([mu, p, u], mode=self._A, output_shape=(self.action_dim,), name="a")
+        q = merge([v, a], mode=self._Q, output_shape=(self.action_dim,), name="q")
 
         model = Model(input=[x, u], output=q)
+        model.summary()
+        mu_model = Model(input=x, output=mu)
+        p_model = Model(input=x, output=p)
+        v_model = Model(input=x, output=v)
+        
         adam = Adam(lr=self.learning_rate)
         model.compile(loss='mse', optimizer=adam)
 
-        return x, u, mu, v, q, p, a, model
+        return x, u, mu_model, v_model, q, p_model, a, model
 
     def update_t(self):
         q_weights = self.q_network.get_weights()
-        t_q_weights = self.target_q_network()
+        t_q_weights = self.target_q_network.get_weights()
         for i in xrange(len(q_weights)):
             t_q_weights[i] = self.tau*q_weights[i] + (1-self.tau)*t_q_weights[i]
         self.target_q_network.set_weights(t_q_weights)
 
     def get_action(self, states):
-        mu = self.sess.run(self.mu, feed_dict={
-            self.x: states
-        })
-        p = self.sess.run(self.p, feed_dict={
-            self.x: states
-        })[0]
+        mu = self.mu.predict(states)[0]
+        p = self.p.predict(states)[0]
 
-        cov = np.minimum(np.linalg.inv(p) * self.noise_scale, 1.0)
-
-        action = np.random.multivariate_normal(mu, cov)
+        if self.action_dim == 1:
+            std = np.minimum(self.noise_scale/p, 1.0)
+            action = np.random.normal(mu, std, size=(1,))
+        else:
+            cov = np.minimum(np.linalg.inv(p) * self.noise_scale, 1.0)
+            action = np.random.multivariate_normal(mu, cov)
 
         return action
 
@@ -145,8 +147,7 @@ class Agent(object):
         if len(self.replay_memory) >= self.initial_replay_size:
             for i in range(self.iteration):
                 self.learn()
-
-        self.update_t()
+                self.update_t()
 
     def get_initial_state(self):
         pass
@@ -167,12 +168,12 @@ class Agent(object):
             terminal_batch.append(data[3])
             next_state_batch.append(data[4])
 
-        target_value_batch = self.sess.run(self.tv, feed_dict={
-            self.tx: np.float32(np.array(next_state_batch))
-        })
+        target_value_batch = self.tv.predict(
+            np.float32(np.array(next_state_batch))
+            )
 
-        y_batch = np.float32(np.array(reward_batch) + self.gamma * target_value_batch)
-
+        y_batch = np.float32(np.array(reward_batch)[:,None] + self.gamma * target_value_batch)
+        
         loss = self.q_network.train_on_batch([
             np.float32(np.array(state_batch)),
             np.float32(np.array(action_batch))], y_batch
