@@ -31,8 +31,9 @@ class Agent(object):
         self.noise_scale = NOISE_SCALE
         self.iteration = ITERATION
         self.initial_replay_size=INITIAL_REPLAY_SIZE
-        self.W_regularizer = l2()
-        self.W_constraint = maxnorm(2)
+        #self.W_regularizer = l2()
+        self.W_regularizer = None
+        self.W_constraint = maxnorm(100)
         self.replay_memory = deque()
 
         self.x, self.u, self.mu, self.v, self.q, self.p, self.a, self.q_network = self.build_network()
@@ -96,14 +97,22 @@ class Agent(object):
             h = BatchNormalization()(x)
         else:
             h = x
-        h = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
-        h = BatchNormalization()(h)
-        h = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
+        h_m = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
+        h_m = BatchNormalization()(h_m)
+        h_m = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_m)
+
+        h_v = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
+        h_v = BatchNormalization()(h_v)
+        h_v = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_v)
+
+        h_l = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
+        h_l = BatchNormalization()(h_l)
+        h_l = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_l)
         
-        mu = Dense(self.action_dim)(h)
-        v = Dense(1,W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
+        mu = Dense(self.action_dim)(h_m)
+        v = Dense(1,W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_v)
         l0 = Dense(self.action_dim * (self.action_dim + 1) / 2, name='l0',
-                   W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
+                   W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_l)
 
         l = Lambda(self._L, output_shape=(self.action_dim, self.action_dim), name='l')(l0)
         p = Lambda(self._P, output_shape=(self.action_dim, self.action_dim), name='p')(l)
@@ -128,9 +137,9 @@ class Agent(object):
             t_q_weights[i] = self.tau*q_weights[i] + (1-self.tau)*t_q_weights[i]
         self.target_q_network.set_weights(t_q_weights)
 
-    def get_action(self, states):
-        mu = self.mu.predict(states)[0]
-        p = self.p.predict(states)[0]
+    def get_action(self, x):
+        mu = self.mu.predict(x)[0]
+        p = self.p.predict(x)[0]
 
         if self.action_dim == 1:
             std = np.minimum(self.noise_scale/p, 1.0)
