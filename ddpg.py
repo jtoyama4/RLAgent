@@ -1,12 +1,12 @@
 #coding: utf-8
-from Arm import Arm
-from Agent_ddpg import Agent
 import gym
-#from Gym_pendulum import PendulumEnv
 import numpy as np
-import rospy
 import sys
 import argparse
+
+sys.path.append('./envs')
+sys.path.append('./agents')
+from Agent_ddpg import Agent
 
 def play(gym_mode):
     BUFFER_SIZE = 500000
@@ -24,10 +24,12 @@ def play(gym_mode):
     np.random.seed(1234)
 
     agent = Agent(ACTION_DIM, STATE_DIM, TAU, GAMMA, LRA, LRC, INITIAL_REPLAY_SIZE, BATCH_SIZE)
+    
     if gym_mode:
         env = gym.make("Pendulum-v0")
-        #env.monitor.start("pendulum-home", force=True)
     else:
+        from Arm import Arm
+        import rospy
         env = Arm()
 
     for _ in xrange(NUM_EPISODES):
@@ -44,8 +46,10 @@ def play(gym_mode):
             
             if t == 300:
                 break
-        if rospy.is_shutdown():
-            break
+
+        if not gym_mode:
+            if rospy.is_shutdown():
+                break
 
 if __name__ =='__main__':
     parser = argparse.ArgumentParser(description="")
