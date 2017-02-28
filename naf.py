@@ -3,9 +3,7 @@ import gym
 import numpy as np
 import sys
 import argparse
-sys.path.append('./agents')
-sys.path.append('./envs')
-from Agent_naf import Agent
+from agents.Agent_naf import Agent
 
 def play(gym_mode):
     BUFFER_SIZE = 500000

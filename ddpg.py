@@ -4,9 +4,8 @@ import numpy as np
 import sys
 import argparse
 
-sys.path.append('./envs')
-sys.path.append('./agents')
-from Agent_ddpg import Agent
+
+from agents.Agent_ddpg import Agent
 
 def play(gym_mode):
     BUFFER_SIZE = 500000
