@@ -1,4 +1,3 @@
-
 import gym
 import numpy as np
 import sys
@@ -24,10 +23,10 @@ def play(gym_mode):
         ACTION_DIM = env.action_space.shape[0]
         STATE_DIM = env.observation_space.shape[0]
     else:
-        from Arm import Arm
+        from envs.Arm import Arm
         env = Arm()
         ACTION_DIM = 1
-        STATE_DIM = 3
+        STATE_DIM = 2
 
     agent = Agent(BUFFER_SIZE, STATE_DIM, ACTION_DIM, BATCH_BOOL, BATCH_SIZE, TAU, GAMMA, LEARNING_RATE, NOISE_SCALE, ITERATION, INITIAL_REPLAY_SIZE)
     
@@ -43,10 +42,13 @@ def play(gym_mode):
             agent.run(state, action, reward, terminal, next_state)
             state = next_state
             t += 1
-
+            if not gym_mode:
+                if rospy.is_shutdown():
+                    break
         if not gym_mode:
             if rospy.is_shutdown():
                 break
+        
 
 
 if __name__ == '__main__':

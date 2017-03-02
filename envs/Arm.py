@@ -39,6 +39,9 @@ class Arm(object):
         self.angle[0] = (msg.current_pos - 2.5) / 2.5
         self.velocity[0] = msg.current_pos
 
+    def render(self):
+        pass
+
     def reset(self):
         r = random.random
         speed4 = random.uniform(0.5, 1.5)
@@ -70,10 +73,12 @@ class Arm(object):
 
     def get_terminal(self, state):
         terminal = False
+        """
         if state < -0.67:
             terminal = True
         if state > 0.75:
             terminal = True
+        """
         return terminal
         
     def get_reward(self, state):
