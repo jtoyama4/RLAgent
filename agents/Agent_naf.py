@@ -14,13 +14,17 @@ from keras.layers import Input, Lambda, Reshape, merge
 from keras.layers.core import Dense, Activation, Flatten, Merge
 from keras.optimizers import Adam
 from keras.layers.normalization import BatchNormalization
+from keras import backend as K
 from keras.regularizers import l2, l1
 from keras.constraints import maxnorm, unitnorm
 from keras.layers.convolutional import Convolution2D as Conv2d
+from keras.utils.visualize_util import plot
+
 
 
 class Agent(object):
-    def __init__(self, BUFFER_SIZE, STATE_DIM, ACTION_DIM, BATCH_BOOL, BATCH_SIZE, TAU, GAMMA, LEARNING_RATE, NOISE_SCALE, ITERATION, INITIAL_REPLAY_SIZE):
+    def __init__(self, BUFFER_SIZE, STATE_DIM, ACTION_DIM, BATCH_BOOL, BATCH_SIZE, TAU, GAMMA, LEARNING_RATE,
+                 NOISE_SCALE, ITERATION, INITIAL_REPLAY_SIZE, ACTION_BOUND):
         self.state_dim = STATE_DIM
         self.action_dim = ACTION_DIM
         self.batch_normalization = BATCH_BOOL
@@ -31,17 +35,20 @@ class Agent(object):
         self.noise_scale = NOISE_SCALE
         self.iteration = ITERATION
         self.initial_replay_size=INITIAL_REPLAY_SIZE
+        self.action_bound = ACTION_BOUND
         #self.W_regularizer = l2()
         self.W_regularizer = None
-        self.W_constraint = maxnorm(100)
+        self.W_constraint = maxnorm(10)
         self.replay_memory = deque()
 
-        self.x, self.u, self.mu, self.v, self.q, self.p, self.a, self.q_network = self.build_network()
-        self.tx, self.tu, self.tmu, self.tv, self.tq, self.tp, self.ta, self.target_q_network = self.build_network()
+        self.x, self.u, self.mu, self.v, self.q, self.p, self.q_network = self.build_network()
+        self.tx, self.tu, self.tmu, self.tv, self.tq, self.tp, self.target_q_network = self.build_network(t_bool=True)
 
         self.target_q_network.set_weights(self.q_network.get_weights())
         self.sess = tf.InteractiveSession()
         tf.initialize_all_variables().run()
+
+        plot(self.target_q_network, to_file="model.png")
         
     def _L(self, x):
         """
@@ -57,12 +64,14 @@ class Agent(object):
 
             # update diagonal values
             diag_indics = tf.square(tf.range(n))
-            t1 = tf.stop_gradient(tf.scatter_update(target, diag_indics, x[:n, :]))
+            #t1 = tf.stop_gradient(tf.scatter_update(target, diag_indics, x[:n, :]))
+            t1 = tf.scatter_update(target, diag_indics, x[:n, :])
 
             # update lower values
             u, v = np.tril_indices(n, -1)
             lower_indics = tf.constant(u * n + v)
-            t2 = tf.stop_gradient(tf.scatter_update(target, lower_indics, x[n:, :]))
+            #t2 = tf.stop_gradient(tf.scatter_update(target, lower_indics, x[n:, :]))
+            t2 = tf.scatter_update(target, lower_indics, x[n:, :])
 
             # reshape lower matrix to lower-triangular matrix
             target = tf.add(t1, t2)
@@ -78,21 +87,26 @@ class Agent(object):
 
     def _A(self, t):
         if self.action_dim == 1:
-            m, p, u = t
-            return -(u - m)**2 * p
+            mu, p, u = t
+            return -0.5 * (u - mu)**2 * p
         else:
-            m, p, u = t
+            mu, p, u = t
             #d = tf.expand_dims(u - m, -1)
-            d = u - m
-            return -tf.matmul(tf.matmul(tf.transpose(d, perm=[0, 2, 1]), p), d)
+            d = u - mu
+            return -0.5 * tf.matmul(tf.matmul(tf.transpose(d, perm=[0, 2, 1]), p), d)
 
     def _Q(self,t):
         v, a = t
         return v + a
 
-    def build_network(self):
-        x = Input(shape=(self.state_dim,), name='state')
-        u = Input(shape=(self.action_dim,), name='action')
+    def namer(self, name, target=False):
+        if target:
+            name = "%s_t" % name
+        return name
+
+    def build_network(self, t_bool=False):
+        x = Input(shape=(self.state_dim,), name=self.namer('state', t_bool))
+        u = Input(shape=(self.action_dim,), name=self.namer('action', t_bool))
         if self.batch_normalization:
             h = BatchNormalization()(x)
         else:
@@ -110,25 +124,30 @@ class Agent(object):
         h_l = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_l)
         
         mu = Dense(self.action_dim)(h_m)
-        v = Dense(1,W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_v)
-        l0 = Dense(self.action_dim * (self.action_dim + 1) / 2, name='l0',
-                   W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_l)
 
-        l = Lambda(self._L, output_shape=(self.action_dim, self.action_dim), name='l')(l0)
-        p = Lambda(self._P, output_shape=(self.action_dim, self.action_dim), name='p')(l)
-        a = merge([mu, p, u], mode=self._A, output_shape=(self.action_dim,), name="a")
-        q = merge([v, a], mode=self._Q, output_shape=(self.action_dim,), name="q")
+        v = Dense(1,W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_v)
+
+        l0 = Dense(self.action_dim * (self.action_dim + 1) / 2, name=self.namer('l0', t_bool),
+                   W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_l)
+        l = Lambda(self._L, output_shape=(self.action_dim, self.action_dim), name=self.namer('l', t_bool))(l0)
+        p = Lambda(self._P, output_shape=(self.action_dim, self.action_dim), name=self.namer('p', t_bool))(l)
+
+        a = merge([mu, p, u], mode=self._A, output_shape=(self.action_dim,), name=self.namer("a", t_bool))
+        q = merge([v, a], mode=self._Q, output_shape=(self.action_dim,), name=self.namer("q", t_bool))
 
         model = Model(input=[x, u], output=q)
         model.summary()
-        mu_model = Model(input=x, output=mu)
-        p_model = Model(input=x, output=p)
-        v_model = Model(input=x, output=v)
-        
+        fm = K.function([K.learning_phase(), x], [mu])
+        mu_model = lambda x: fm([0, x])
+        fp = K.function([K.learning_phase(), x], [p])
+        p_model = lambda x: fp([0, x])
+        fv = K.function([K.learning_phase(), x], [v])
+        v_model = lambda x: fv([0, x])
+
         adam = Adam(lr=self.learning_rate)
         model.compile(loss='mse', optimizer=adam)
 
-        return x, u, mu_model, v_model, q, p_model, a, model
+        return x, u, mu_model, v_model, q, p_model, model
 
     def update_t(self):
         q_weights = self.q_network.get_weights()
@@ -138,8 +157,8 @@ class Agent(object):
         self.target_q_network.set_weights(t_q_weights)
 
     def get_action(self, x):
-        mu = self.mu.predict(x)[0]
-        p = self.p.predict(x)[0]
+        mu = self.mu(x)[0]
+        p = self.p(x)[0]
 
         if self.action_dim == 1:
             std = np.minimum(self.noise_scale/p, 1.0)
@@ -147,6 +166,8 @@ class Agent(object):
         else:
             cov = np.minimum(np.linalg.inv(p) * self.noise_scale, 1.0)
             action = np.random.multivariate_normal(mu, cov)
+
+        action = np.clip(action, self.action_bound[0], self.action_bound[1])
 
         return action
 
@@ -177,11 +198,13 @@ class Agent(object):
             terminal_batch.append(data[3])
             next_state_batch.append(data[4])
 
-        target_value_batch = self.tv.predict(
+        target_value_batch = self.tv(
             np.float32(np.array(next_state_batch))
-            )
+            )[0]
 
-        y_batch = np.float32(np.array(reward_batch)[:,None] + self.gamma * target_value_batch)
+        reward_batch = np.array(reward_batch).reshape([self.batch_size, 1])
+
+        y_batch = np.float32(reward_batch + self.gamma * target_value_batch)
         
         loss = self.q_network.train_on_batch([
             np.float32(np.array(state_batch)),
