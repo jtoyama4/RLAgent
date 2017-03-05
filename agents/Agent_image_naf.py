@@ -105,27 +105,36 @@ class Agent(object):
         return name
 
     def build_network(self, t_bool=False):
-        x = Input(shape=(self.state_dim,), name=self.namer('state', t_bool))
+        x = Input(shape=(4, self.state_dim, self.state_dim), name=self.namer('state', t_bool))
         u = Input(shape=(self.action_dim,), name=self.namer('action', t_bool))
+        #x_true = Input(shape=(1, self.state_dim, self.state_dim), name=self.namer('state', t_bool))
+
+        #x = merge([x,x_true], output_shape=(1,self.state_dim*2, self.state_dim))
         if self.batch_normalization:
             h = BatchNormalization()(x)
         else:
             h = x
-        h_m = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
-        h_m = BatchNormalization()(h_m)
-        h_m = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_m)
+        h = Conv2d(8, 8, 8, activation='relu', subsample=(4, 4), W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
+        h = BatchNormalization()(h)
 
-        h_v = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
-        h_v = BatchNormalization()(h_v)
-        h_v = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_v)
+        h_m = Conv2d(16, 4, 4, subsample=(2, 2), activation='relu', W_constraint=self.W_constraint,
+                     W_regularizer=self.W_regularizer)(h)
+        h_m = Flatten()(h_m)
+        h_m = Dense(256, activation='relu')(h_m)
 
-        h_l = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
-        h_l = BatchNormalization()(h_l)
-        h_l = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_l)
+        h_v = Conv2d(16, 4, 4, subsample=(2, 2), activation='relu', W_constraint=self.W_constraint,
+                     W_regularizer=self.W_regularizer)(h)
+        h_v = Flatten()(h_v)
+        h_v = Dense(256, activation='relu')(h_v)
+
+        h_l = Conv2d(16, 4, 4, subsample=(2, 2), activation='relu', W_constraint=self.W_constraint,
+                     W_regularizer=self.W_regularizer)(h)
+        h_l = Flatten()(h_l)
+        h_l = Dense(256, activation='relu')(h_l)
         
         mu = Dense(self.action_dim)(h_m)
 
-        v = Dense(1,W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_v)
+        v = Dense(1, W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_v)
 
         l0 = Dense(self.action_dim * (self.action_dim + 1) / 2, name=self.namer('l0', t_bool),
                    W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_l)

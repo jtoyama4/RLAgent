@@ -108,7 +108,6 @@ class Agent(object):
         if verbose: print(fmtstr % (i + 1, rdotr, np.linalg.norm(x)))  # pylint: disable=W0631
         return x
 
-
     def build_policy(self):
         g_input = Input(shape=[self.state_dim])
         h = Dense(100, activation='tanh')(g_input)

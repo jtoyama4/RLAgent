@@ -15,6 +15,7 @@ def play(gym_mode):
     NOISE_SCALE=0.3
     ITERATION = 1
     BATCH_BOOL = True
+    MOTORS=[6,7,8,9]
 
     np.random.seed(1234)
 
@@ -27,11 +28,11 @@ def play(gym_mode):
         STATE_DIM = env.observation_space.shape[0]
         ACTION_BOUND = [-env.action_space.high, env.action_space.high]
     else:
-        from envs.Arm import Arm
-        env = Arm()
-        ACTION_DIM = 1
-        STATE_DIM = 2
-
+        from envs.Arm_image import Arm
+        ACTION_DIM = len(MOTORS)
+        STATE_DIM = 84
+        env = Arm(MOTORS)
+        ACTION_BOUND = [-1.5, 1.5]
 
     agent = Agent(BUFFER_SIZE, STATE_DIM, ACTION_DIM, BATCH_BOOL, BATCH_SIZE, TAU, GAMMA, LEARNING_RATE, NOISE_SCALE,
                   ITERATION, INITIAL_REPLAY_SIZE, ACTION_BOUND)
@@ -64,8 +65,10 @@ def play(gym_mode):
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('--gym', action='store_true', default=False)
+    parser.add_argument('--target', default=None)
     args = parser.parse_args()
     gym_mode = args.gym
+    target = np.load(args.target)
     if gym_mode:
         play(gym_mode)
     else:
