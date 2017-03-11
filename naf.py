@@ -27,6 +27,7 @@ def play(gym_mode):
             ACTION_DIM = 1
         STATE_DIM = env.observation_space.shape[0]
         ACTION_BOUND = [-env.action_space.high, env.action_space.high]
+        print env.action_space.shape
     else:
         from envs.Arm_image import Arm
         ACTION_DIM = len(MOTORS)
@@ -68,7 +69,8 @@ if __name__ == '__main__':
     parser.add_argument('--target', default=None)
     args = parser.parse_args()
     gym_mode = args.gym
-    target = np.load(args.target)
+    if args.target:
+        target = np.load(args.target)
     if gym_mode:
         play(gym_mode)
     else:

@@ -25,62 +25,85 @@ class PerlmutterHvp(object):
         self.reg_coeff = None
         self.opt_fun = None
 
-    def update_opt(self, f, target, reg_coeff):
+    def update_opt(self, f, target, inputs, reg_coeff):
         self.target = target
         self.reg_coeff = reg_coeff
         params = target.trainable_weights
 
         constraint_grads = K.gradients(
-            f, wrt=params, disconnected_inputs='warn')
-        xs = tuple([K.placeholder(shape=p.shape, ndim=p.ndim, name="%s x" % p.name) for p in params])
+            f, params)
+        xs = list([K.placeholder(shape=K.int_shape(p), ndim=K.ndim(p)) for p in params])
+
+        tmp = [K.sum(g * x) for g, x in zip(constraint_grads, xs)]
 
         Hx_plain_splits = K.gradients(
-            K.sum([K.sum(g * x) for g, x in zip(constraint_grads, xs)]),
-            wrt=params,
-            disconnected_inputs='warn'
+            K.sum(K.stack(tmp)),
+            params
             )
 
-        self.hx_fun = K.function(
-                inputs=[xs],
+        inputs.extend(xs)
+
+        a = [K.learning_phase()]
+        a.extend(inputs)
+
+        hx_fun = K.function(
+                inputs=a,
                 outputs=Hx_plain_splits,
             )
 
-    def build_eval(self):
+        return hx_fun
+
+    def build_eval(self, inputs):
+        self.inputs = inputs
         def eval(x):
             xs = self.target.trainable_weights
-            ret = self.hx_fun([xs]) + self.reg_coeff * x
+            ret = self.hx_fun([0].extend(self.inputs.extend(xs))) + self.reg_coeff * x
             return ret
 
         return eval
 
 
 class Agent(object):
-    def __init__(self, STATE_DIM, ACTION_DIM, BATCH_SIZE, DLR, MAX_C_V=0.01, REG_COEFF=0.1 , BATCH_BOOL=True, LAMBDA=0.99):
+    def __init__(self, STATE_DIM, ACTION_DIM, BATCH_SIZE, ACTION_BOUND=None, MAX_C_V=0.01, REG_COEFF=0.1 ,
+                 BATCH_BOOL=True, GAMMA=0.99):
         self.state_dim = STATE_DIM
         self.action_dim = ACTION_DIM
         self.batch_normalization = BATCH_BOOL
         self.batch_size = BATCH_SIZE
-        self.dlr = DLR
-        self.max_constraint_val = MAX_C_V
-        self.lamb = LAMBDA
+        self._max_constraint_val = MAX_C_V
+        self.reg_coeff = REG_COEFF
+        self.gamma = GAMMA
+        self._backtrack_ratio = 0.8
+        self._max_backtracks=15
+        self.cg_iters = 5
+        if ACTION_BOUND is not None:
+            self.action_bound = ACTION_BOUND
 
         self._hvp_approach = PerlmutterHvp()
 
-        self.cost = self.build_discriminator()
-        self.policy, self.policy_grads, self.kl = self.build_generator()
-
-        self._hvp_approach.update_opt(self.kl, self.policy, REG_COEFF)
+        self.f_loss, self.f_grad, self.f_constraint, self.policy = self.build_computation_graph()
 
         self.sess = tf.InteractiveSession()
         tf.initialize_all_variables().run()
 
-    def kld(self, p, old_p):
-        kl = kl_div(old_p, p)
+    def kld(self, t):
+        old_mu, old_sigma, new_mu, new_sigma = t
+        kl = K.mean(0.5 * K.log(new_sigma/old_sigma) + (old_sigma + (old_mu-new_mu)**2)/2*new_sigma**2)
         return kl
+
+    def calculate_likelihood(self, t):
+        mu, sigma, x = t
+        log_like = -1.0/2 * K.log(2*3.14) - 1.0/2 * K.log(sigma) - K.mean(x-mu)/(2.0*sigma)
+        return log_like
+
+    def surrogate_loss(self, t):
+        new, old, q = t
+        return -K.mean((K.exp(new - old) * q))
 
     def cg(self, f_Ax, b, cg_iters=10, callback=None, verbose=False, residual_tol=1e-10):
         p = b.copy()
         r = b.copy()
+        print b.shape
         x = np.zeros_like(b)
         rdotr = r.dot(r)
 
@@ -108,25 +131,114 @@ class Agent(object):
         if verbose: print(fmtstr % (i + 1, rdotr, np.linalg.norm(x)))  # pylint: disable=W0631
         return x
 
-    def build_policy(self):
-        g_input = Input(shape=[self.state_dim])
-        h = Dense(100, activation='tanh')(g_input)
+    def build_computation_graph(self):
+        state = Input(shape=[self.state_dim], name="state")
+        h = Dense(30, activation='tanh')(state)
         h = BatchNormalization()(h)
-        h = Dense(100, activation='tanh')(h)
+        h = Dense(30, activation='tanh')(h)
         h = BatchNormalization()(h)
-        a = Dense(self.action_dim)(h)
-        model = Model(g_input, a)
+        mu = Dense(self.action_dim)(h)
 
-        #build grad wrt policy
-        out = K.log(model.output)
-        weights = model.trainable_weights
+        sigma_in = Input(shape=[self.action_dim], name="sigma_in")
+        log_sigma = Dense(self.action_dim)(sigma_in)
+        sigma = Lambda(lambda x: K.exp(x))(log_sigma)
+
+        policy = Model([state, sigma_in], [mu, sigma], name="policy")
+
+        weights = policy.trainable_weights
+
+        sampled_action = Input(shape=[self.action_dim])
+
+        loglikelihood = merge([mu, sigma, sampled_action], mode=self.calculate_likelihood,
+                              output_shape=(self.action_dim,), name="loglike")
+
+        old_mu = Input(shape=[self.action_dim])
+        old_sigma = Input(shape=[self.action_dim])
+
+        old_loglikelihood = merge([old_mu, old_sigma, sampled_action],mode=self.calculate_likelihood,
+                                  output_shape=(self.action_dim,), name="old_loglike")
+
+        q = Input(shape=[1])
+
+        #build surrogate loss and grad wrt surrogate loss
+        surr = merge([loglikelihood, old_loglikelihood, q], mode=self.surrogate_loss,
+                     output_shape=(1,), name="surrogate_loss")
+        gradients = K.gradients(surr, weights)
+
+        flat_grad = K.concatenate(gradients)
 
         #build kl
-        old_p = Input(shape=[self.action_dim])
-        kl = merge([a, old_p], mode=self.kld)
-        kl_model = Model([g_input, old_p], kl)
+        #kl = merge([old_mu, old_sigma, tf.stop_gradient(mu), tf.stop_gradient(sigma)], mode=self.kld)
+        kl = merge([old_mu, old_sigma, mu, sigma], mode=self.kld, output_shape=(1,))
 
-        gradients = K.gradients(out, weights)
+        f_loss = K.function([K.learning_phase(), state, sigma_in, old_mu, old_sigma, q, sampled_action], [surr])
+        f_grad = K.function([K.learning_phase(), state, sigma_in, old_mu, old_sigma, q, sampled_action], flat_grad)
+        f_constraint = K.function([K.learning_phase(), state, sigma_in, old_mu, old_sigma], [kl])
 
-        return model, gradients, kl_model
+        self._hvp_approach.update_opt(kl, policy, [state, sigma_in, old_mu, old_sigma], self.reg_coeff)
+
+        return f_loss, f_grad, f_constraint, policy
+
+    def trpo_step(self, state, action, q):
+        sigma_in = np.float32(np.ones(shape=[self.batch_size, self.action_dim]))
+        old_mu, old_sigma = self.policy.predict([state, sigma_in], batch_size=self.batch_size)
+
+        loss_before = self.f_loss([0, state, sigma_in, old_mu, old_sigma, q, action])
+
+        grad = self.f_grad([0, state, sigma_in, old_mu, old_sigma, q, action])
+
+        Hx = self._hvp_approach.build_eval([state, sigma_in, old_mu, old_sigma])
+
+        descent_direction = self.cg(Hx, np.array(grad), cg_iters=self.cg_iters)
+
+        initial_step_size = np.sqrt(
+            2.0 * self._max_constraint_val *
+            (1. / (descent_direction.dot(Hx(descent_direction)) + 1e-8))
+        )
+
+        if np.isnan(initial_step_size):
+            initial_step_size = 1.
+        flat_descent_step = initial_step_size * descent_direction
+
+        print "descent direction computed"
+
+        prev_param = self.policy.trainable_weights
+
+        for n_iter, ratio in enumerate(self._backtrack_ratio ** np.arange(self._max_backtracks)):
+            cur_step = ratio * flat_descent_step
+            cur_param = prev_param - cur_step
+            self.policy.set_weights(cur_param, trainable=True)
+            loss = self.f_loss([0, state, sigma_in, old_mu, old_sigma, q, action])
+            constraint_val = self.f_constraint([0, state, sigma_in, old_mu, old_sigma])
+            if loss < loss_before and constraint_val <= self._max_constraint_val:
+                break
+
+    def get_action(self, state):
+        mu, sigma = self.policy.predict([state, np.ones(self.action_dim,)])
+        sdv = np.sqrt(sigma)
+        action = np.random.normal(mu, sdv)
+
+        action = np.clip(action, self.action_bound[0], self.action_bound[1])
+
+        return action
+
+    def run(self, state, action, reward):
+        q = self.estimate_q(reward)
+
+        self.trpo_step(np.float32(np.array(state)), np.float32(np.array(action)),
+                       np.float32(np.expand_dims(np.array(q), axis=1)))
+
+    def estimate_q(self, reward):
+        def discount_sum(items):
+            sum = 0.0
+            for n, item in enumerate(items):
+                sum += self.gamma**n * item
+            return sum
+
+        q = [discount_sum(reward[i:]) for i in range(len(reward))]
+
+        return q
+
+
+
 
