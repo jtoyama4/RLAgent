@@ -58,13 +58,50 @@ class Agent(object):
         if self.action_dim == 1:
             return tf.exp(x)
         else:
+            L_flat = x
+            nb_elems = (self.action_dim * self.action_dim + self.action_dim) / 2
+
+            diag_indeces = [0]
+
+            for row in range(1, self.action_dim):
+                diag_indeces.append(diag_indeces[-1] + (row + 1))
+
+            diag_mask = np.zeros(1 + nb_elems)
+            diag_mask[np.array(diag_indeces) + 1] = 1
+            diag_mask = K.variable(diag_mask)
+
+            nb_rows = tf.shape(L_flat)[0]
+            zeros = tf.expand_dims(tf.tile(K.zeros((1,)), [nb_rows]), 1)
+            L_flat = tf.concat(1, [zeros, L_flat])
+
+            tril_mask = np.zeros((self.action_dim, self.action_dim), dtype="int32")
+            tril_mask[np.tril_indices(self.action_dim)] = range(1, nb_elems + 1)
+            init = [
+                K.zeros((self.action_dim, self.action_dim)),
+                ]
+
+            def ff(a,x):
+                x_ = K.exp(x)
+                x_ *= diag_mask
+                x_ += x * (1. - diag_mask)
+                L_ = tf.gather(x_, tril_mask)
+                return [L_]
+
+            tmp = tf.scan(ff, L_flat, initializer=init)
+            return tmp[0]
+            
+            """
             n = self.action_dim
             x = tf.transpose(x, perm=(1, 0))
             target = tf.Variable(np.zeros((n * n, self.batch_size)), dtype=tf.float32)
 
+            print n
             # update diagonal values
             diag_indics = tf.square(tf.range(n))
             #t1 = tf.stop_gradient(tf.scatter_update(target, diag_indics, x[:n, :]))
+            print tf.shape(x)
+            print tf.shape(diag_indics)
+            print tf.shape(target)
             t1 = tf.scatter_update(target, diag_indics, x[:n, :])
 
             # update lower values
@@ -78,22 +115,23 @@ class Agent(object):
             target = tf.transpose(target, (1, 0))
             target = tf.reshape(target, (self.batch_size, n, n))
             return target
-
+            """
     def _P(self, x):
         if self.action_dim == 1:
             return x**2
         else:
-            return tf.matmul(x, tf.transpose(x, perm=[0, 2, 1]))
-
+            return K.batch_dot(x, K.permute_dimensions(x, (0, 2, 1)))
+                                                                                                                                        
     def _A(self, t):
         if self.action_dim == 1:
             mu, p, u = t
             return -0.5 * (u - mu)**2 * p
         else:
             mu, p, u = t
-            #d = tf.expand_dims(u - m, -1)
             d = u - mu
-            return -0.5 * tf.matmul(tf.matmul(tf.transpose(d, perm=[0, 2, 1]), p), d)
+            d = K.expand_dims(u - mu, dim=-1)
+            #return -0.5 * tf.matmul(tf.matmul(tf.transpose(d, perm=[0, 2, 1]), p), d)
+            return -0.5 * K.batch_dot(K.batch_dot(K.permute_dimensions(d, (0,2,1)), p), d)
 
     def _Q(self,t):
         v, a = t
@@ -105,7 +143,7 @@ class Agent(object):
         return name
 
     def build_network(self, t_bool=False):
-        x = Input(shape=(4, self.state_dim, self.state_dim), name=self.namer('state', t_bool))
+        x = Input(shape=(self.state_dim, self.state_dim, 1), name=self.namer('state', t_bool))
         u = Input(shape=(self.action_dim,), name=self.namer('action', t_bool))
         #x_true = Input(shape=(1, self.state_dim, self.state_dim), name=self.namer('state', t_bool))
 
@@ -166,8 +204,8 @@ class Agent(object):
         self.target_q_network.set_weights(t_q_weights)
 
     def get_action(self, x):
-        mu = self.mu(x)[0]
-        p = self.p(x)[0]
+        mu = self.mu(x)[0][0]
+        p = self.p(x)[0][0]
 
         if self.action_dim == 1:
             std = np.minimum(self.noise_scale/p, 1.0)
@@ -211,10 +249,10 @@ class Agent(object):
             np.float32(np.array(next_state_batch))
             )[0]
 
-        reward_batch = np.array(reward_batch).reshape([self.batch_size, 1])
+        reward_batch = np.array(reward_batch)
 
-        y_batch = np.float32(reward_batch + self.gamma * target_value_batch)
-        
+        y_batch = np.float32(reward_batch[:,None] + self.gamma * target_value_batch)
+        y_batch = np.tile(y_batch, (1, self.action_dim))
         loss = self.q_network.train_on_batch([
             np.float32(np.array(state_batch)),
             np.float32(np.array(action_batch))], y_batch
