@@ -2,20 +2,20 @@ import gym
 import numpy as np
 import sys
 import argparse
-from agents.Agent_naf import Agent
+from agents.Agent_image_naf import Agent
 
-def play(gym_mode):
+def play(gym_mode, target=None):
     BUFFER_SIZE = 100000
     GAMMA = 0.95
     TAU = 0.001
     LEARNING_RATE = 0.001
     NUM_EPISODES = 400
-    INITIAL_REPLAY_SIZE = 1000
+    INITIAL_REPLAY_SIZE = 100
     BATCH_SIZE = 100
     NOISE_SCALE=0.3
     ITERATION = 1
     BATCH_BOOL = True
-    MOTORS=[6,7,8,9]
+    MOTORS=[7,8,9,10]
 
     np.random.seed(1234)
 
@@ -32,8 +32,8 @@ def play(gym_mode):
         from envs.Arm_image import Arm
         ACTION_DIM = len(MOTORS)
         STATE_DIM = 84
-        env = Arm(MOTORS)
-        ACTION_BOUND = [-1.5, 1.5]
+        env = Arm(MOTORS, target)
+        ACTION_BOUND = [-2.0, 2.0]
 
     agent = Agent(BUFFER_SIZE, STATE_DIM, ACTION_DIM, BATCH_BOOL, BATCH_SIZE, TAU, GAMMA, LEARNING_RATE, NOISE_SCALE,
                   ITERATION, INITIAL_REPLAY_SIZE, ACTION_BOUND)
@@ -46,12 +46,14 @@ def play(gym_mode):
         print _
         while not terminal:
             env.render()
-            action = agent.get_action(state.reshape(1, state.shape[0]))
+            action = agent.get_action(state.reshape(1, state.shape[0], state.shape[1], 1))
             next_state, reward, terminal, _ = env.step(action)
             agent.run(state, action, reward, terminal, next_state)
             total_reward += reward
             state = next_state
             t += 1
+            if t == 100:
+                break
             if not gym_mode:
                 if rospy.is_shutdown():
                     break
@@ -76,6 +78,6 @@ if __name__ == '__main__':
     else:
         import rospy
         try:
-            play(gym_mode)
+            play(gym_mode, target)
         except rospy.ROSInterruptException:
             pass
