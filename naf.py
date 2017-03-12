@@ -2,14 +2,14 @@ import gym
 import numpy as np
 import sys
 import argparse
-from agents.Agent_image_naf import Agent
+
 
 def play(gym_mode, target=None):
     BUFFER_SIZE = 100000
     GAMMA = 0.95
     TAU = 0.001
     LEARNING_RATE = 0.001
-    NUM_EPISODES = 400
+    NUM_EPISODES = 10000
     INITIAL_REPLAY_SIZE = 100
     BATCH_SIZE = 100
     NOISE_SCALE=0.3
@@ -20,15 +20,19 @@ def play(gym_mode, target=None):
     np.random.seed(1234)
 
     if gym_mode:
-        env = gym.make("MountainCarContinuous-v0")
+        from agents.Agent_naf import Agent
+        env = gym.make("LunarLanderContinuous-v2")
+        #env = gym.make("Pendulum-v0")
         try:
             ACTION_DIM = env.action_space.shape[0]
         except AttributeError:
             ACTION_DIM = 1
         STATE_DIM = env.observation_space.shape[0]
         ACTION_BOUND = [-env.action_space.high, env.action_space.high]
+        print "action bound ", ACTION_BOUND
         print env.action_space.shape
     else:
+        from agents.Agent_image_naf import Agent
         from envs.Arm_image import Arm
         ACTION_DIM = len(MOTORS)
         STATE_DIM = 84
@@ -43,22 +47,22 @@ def play(gym_mode, target=None):
         state = env.reset()
         t = 0
         total_reward = 0
-        print _
+        print "Episode:%d" % _
         while not terminal:
             env.render()
-            action = agent.get_action(state.reshape(1, state.shape[0], state.shape[1], 1))
+            action = agent.get_action(agent.state_shaping(state))
             next_state, reward, terminal, _ = env.step(action)
             agent.run(state, action, reward, terminal, next_state)
             total_reward += reward
             state = next_state
             t += 1
-            if t == 100:
-                break
             if not gym_mode:
+                if t == 100:
+                    break
                 if rospy.is_shutdown():
                     break
 
-        print total_reward
+        print "Reward:%d" % total_reward
         if not gym_mode:
             if rospy.is_shutdown():
                 break

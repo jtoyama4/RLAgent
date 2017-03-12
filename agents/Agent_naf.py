@@ -41,8 +41,8 @@ class Agent(object):
         self.W_constraint = maxnorm(10)
         self.replay_memory = deque()
 
-        self.x, self.u, self.mu, self.v, self.q, self.p, self.q_network = self.build_network()
-        self.tx, self.tu, self.tmu, self.tv, self.tq, self.tp, self.target_q_network = self.build_network(t_bool=True)
+        self.x, self.u, self.mu, self.v, self.q, self.p, self.q_network, self.l = self.build_network()
+        self.tx, self.tu, self.tmu, self.tv, self.tq, self.tp, self.target_q_network, self.tl = self.build_network(t_bool=True)
 
         self.target_q_network.set_weights(self.q_network.get_weights())
         self.sess = tf.InteractiveSession()
@@ -58,7 +58,39 @@ class Agent(object):
         if self.action_dim == 1:
             return tf.exp(x)
         else:
-            n = self.action_dim
+            L_flat = x
+            nb_elems = (self.action_dim * self.action_dim + self.action_dim) / 2
+
+            diag_indeces = [0]
+
+            for row in range(1, self.action_dim):
+                diag_indeces.append(diag_indeces[-1] + (row + 1))
+
+            diag_mask = np.zeros(1 + nb_elems)
+            diag_mask[np.array(diag_indeces) + 1] = 1
+            diag_mask = K.variable(diag_mask)
+
+            nb_rows = tf.shape(L_flat)[0]
+            zeros = tf.expand_dims(tf.tile(K.zeros((1,)), [nb_rows]), 1)
+            L_flat = tf.concat(values=[zeros, L_flat], axis=1)
+
+            tril_mask = np.zeros((self.action_dim, self.action_dim), dtype="int32")
+            tril_mask[np.tril_indices(self.action_dim)] = range(1, nb_elems + 1)
+            init = [
+                K.zeros((self.action_dim, self.action_dim)),
+                ]
+
+            def ff(a,x):
+                x_ = K.exp(x)
+                x_ *= diag_mask
+                x_ += x * (1. - diag_mask)
+                L_ = tf.gather(x_, tril_mask)
+                return [L_]
+
+            tmp = tf.scan(ff, L_flat, initializer=init)
+            return tmp[0]
+            
+            """n = self.action_dim
             x = tf.transpose(x, perm=(1, 0))
             target = tf.Variable(np.zeros((n * n, self.batch_size)), dtype=tf.float32)
 
@@ -77,13 +109,14 @@ class Agent(object):
             target = tf.add(t1, t2)
             target = tf.transpose(target, (1, 0))
             target = tf.reshape(target, (self.batch_size, n, n))
-            return target
+            return target"""
+
 
     def _P(self, x):
         if self.action_dim == 1:
             return x**2
         else:
-            return tf.matmul(x, tf.transpose(x, perm=[0, 2, 1]))
+            return K.batch_dot(x, K.permute_dimensions(x, (0,2,1)))
 
     def _A(self, t):
         if self.action_dim == 1:
@@ -91,9 +124,10 @@ class Agent(object):
             return -0.5 * (u - mu)**2 * p
         else:
             mu, p, u = t
-            #d = tf.expand_dims(u - m, -1)
-            d = u - mu
-            return -0.5 * tf.matmul(tf.matmul(tf.transpose(d, perm=[0, 2, 1]), p), d)
+            d = K.expand_dims(u-mu, -1)
+            #d = u-mu
+            return -0.5 * K.batch_dot(K.batch_dot(K.permute_dimensions(d, (0,2,1)), p), d)
+            #return -0.5 * K.batch_dot(K.batch_dot(K.transpose(d), p), d)
 
     def _Q(self,t):
         v, a = t
@@ -125,7 +159,7 @@ class Agent(object):
         
         mu = Dense(self.action_dim)(h_m)
 
-        v = Dense(1,W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_v)
+        v = Dense(1, W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_v)
 
         l0 = Dense(self.action_dim * (self.action_dim + 1) / 2, name=self.namer('l0', t_bool),
                    W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_l)
@@ -136,7 +170,9 @@ class Agent(object):
         q = merge([v, a], mode=self._Q, output_shape=(self.action_dim,), name=self.namer("q", t_bool))
 
         model = Model(input=[x, u], output=q)
-        model.summary()
+        #model.summary()
+        fl = K.function([K.learning_phase(), x], [l])
+        l_model = lambda x: fl([0, x])
         fm = K.function([K.learning_phase(), x], [mu])
         mu_model = lambda x: fm([0, x])
         fp = K.function([K.learning_phase(), x], [p])
@@ -147,7 +183,7 @@ class Agent(object):
         adam = Adam(lr=self.learning_rate)
         model.compile(loss='mse', optimizer=adam)
 
-        return x, u, mu_model, v_model, q, p_model, model
+        return x, u, mu_model, v_model, q, p_model, model, l_model
 
     def update_t(self):
         q_weights = self.q_network.get_weights()
@@ -157,19 +193,28 @@ class Agent(object):
         self.target_q_network.set_weights(t_q_weights)
 
     def get_action(self, x):
-        mu = self.mu(x)[0]
-        p = self.p(x)[0]
+        mu = self.mu(x)[0][0]
+        p = self.p(x)[0][0]
+        l = self.l(x)
 
         if self.action_dim == 1:
             std = np.minimum(self.noise_scale/p, 1.0)
             action = np.random.normal(mu, std, size=(1,))
         else:
-            cov = np.minimum(np.linalg.inv(p) * self.noise_scale, 1.0)
+            pp = np.linalg.inv(p)
+
+            cov = np.minimum(np.linalg.inv(p) * self.noise_scale, 1)
             action = np.random.multivariate_normal(mu, cov)
 
+        if any(np.isnan(action)):
+            print "nan detected. place mu instead."
+            action = mu
         action = np.clip(action, self.action_bound[0], self.action_bound[1])
 
         return action
+
+    def state_shaping(self, state):
+        return state.reshape(1, state.shape[0])
 
     def run(self, state, action, reward, terminal, next_state):
         self.replay_memory.append((state, action, reward, terminal, next_state))
@@ -202,10 +247,10 @@ class Agent(object):
             np.float32(np.array(next_state_batch))
             )[0]
 
-        reward_batch = np.array(reward_batch).reshape([self.batch_size, 1])
+        reward_batch = np.array(reward_batch)
 
-        y_batch = np.float32(reward_batch + self.gamma * target_value_batch)
-        
+        y_batch = np.float32(reward_batch[:, None] + self.gamma * target_value_batch)
+        y_batch = np.tile(y_batch, (1, self.action_dim))
         loss = self.q_network.train_on_batch([
             np.float32(np.array(state_batch)),
             np.float32(np.array(action_batch))], y_batch

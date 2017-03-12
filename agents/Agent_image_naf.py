@@ -203,6 +203,9 @@ class Agent(object):
             t_q_weights[i] = self.tau*q_weights[i] + (1-self.tau)*t_q_weights[i]
         self.target_q_network.set_weights(t_q_weights)
 
+    def state_shaping(self, state):
+        return state.reshape(1, state.shape[0], state.shape[1], 1)
+
     def get_action(self, x):
         mu = self.mu(x)[0][0]
         p = self.p(x)[0][0]
