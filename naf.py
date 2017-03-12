@@ -1,3 +1,4 @@
+# coding: utf-8
 import gym
 import numpy as np
 import sys
@@ -48,6 +49,7 @@ def play(gym_mode, target=None):
         t = 0
         total_reward = 0
         print "Episode:%d" % _
+        print >> log, "Episode:%d" % _ 
         while not terminal:
             env.render()
             action = agent.get_action(agent.state_shaping(state))
@@ -63,6 +65,7 @@ def play(gym_mode, target=None):
                     break
 
         print "Reward:%d" % total_reward
+        print >> log, "Reward:%d" % total_reward
         if not gym_mode:
             if rospy.is_shutdown():
                 break
@@ -75,6 +78,7 @@ if __name__ == '__main__':
     parser.add_argument('--target', default=None)
     args = parser.parse_args()
     gym_mode = args.gym
+    log = open('log.txt', 'a')
     if args.target:
         target = np.load(args.target)
     if gym_mode:
