@@ -72,8 +72,10 @@ class Agent(object):
 
             nb_rows = tf.shape(L_flat)[0]
             zeros = tf.expand_dims(tf.tile(K.zeros((1,)), [nb_rows]), 1)
-            L_flat = tf.concat(values=[zeros, L_flat], axis=1)
-
+            if tf.__version__ == "1.0.0":
+                L_flat = tf.concat(values=[zeros, L_flat], axis=1)
+            else:
+                L_flat = tf.concat(1, [zeros, L_flat])
             tril_mask = np.zeros((self.action_dim, self.action_dim), dtype="int32")
             tril_mask[np.tril_indices(self.action_dim)] = range(1, nb_elems + 1)
             init = [
@@ -201,11 +203,13 @@ class Agent(object):
             std = np.minimum(self.noise_scale/p, 1.0)
             action = np.random.normal(mu, std, size=(1,))
         else:
-            pp = np.linalg.inv(p)
+            try:
+                pp = np.linalg.inv(p)
 
-            cov = np.minimum(np.linalg.inv(p) * self.noise_scale, 1)
-            action = np.random.multivariate_normal(mu, cov)
-
+                cov = np.minimum(np.linalg.inv(p) * self.noise_scale, 1)
+                action = np.random.multivariate_normal(mu, cov)
+            except:
+                action = mu
         if any(np.isnan(action)):
             print "nan detected. place mu instead."
             action = mu

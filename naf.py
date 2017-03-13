@@ -43,13 +43,12 @@ def play(gym_mode, target=None):
     agent = Agent(BUFFER_SIZE, STATE_DIM, ACTION_DIM, BATCH_BOOL, BATCH_SIZE, TAU, GAMMA, LEARNING_RATE, NOISE_SCALE,
                   ITERATION, INITIAL_REPLAY_SIZE, ACTION_BOUND)
     
-    for _ in xrange(NUM_EPISODES):
+    for n_ep in xrange(NUM_EPISODES):
         terminal = False
         state = env.reset()
         t = 0
         total_reward = 0
-        print "Episode:%d" % _
-        print >> log, "Episode:%d" % _ 
+        
         while not terminal:
             env.render()
             action = agent.get_action(agent.state_shaping(state))
@@ -64,8 +63,8 @@ def play(gym_mode, target=None):
                 if rospy.is_shutdown():
                     break
 
-        print "Reward:%d" % total_reward
-        print >> log, "Reward:%d" % total_reward
+        print "Episode:%d Reward:%d" % (n_ep, total_reward)
+        print >> log, "Episode:%d Reward:%d" % (n_ep, total_reward)
         if not gym_mode:
             if rospy.is_shutdown():
                 break
