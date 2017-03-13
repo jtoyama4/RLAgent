@@ -150,17 +150,17 @@ class Agent(object):
             h = x
         h_m = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
         h_m = BatchNormalization()(h_m)
-        h_m = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_m)
+        h_m = Dense(100, activation='tanh', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_m)
 
         h_v = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
         h_v = BatchNormalization()(h_v)
-        h_v = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_v)
+        h_v = Dense(100, activation='tanh', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_v)
 
         h_l = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
         h_l = BatchNormalization()(h_l)
-        h_l = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_l)
+        h_l = Dense(100, activation='tanh', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_l)
         
-        mu = Dense(self.action_dim)(h_m)
+        mu = Dense(self.action_dim, activation='tanh')(h_m)
 
         v = Dense(1, W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_v)
 
@@ -205,7 +205,6 @@ class Agent(object):
 
         if not self.is_pos_def(p):
             print "p is not positive definite"
-            sys.exit()
 
         if self.action_dim == 1:
             std = np.minimum(self.noise_scale/p, 1.0)
@@ -214,9 +213,11 @@ class Agent(object):
             try:
                 cov = np.linalg.inv(p) * self.noise_scale
                 if not self.is_pos_def(cov):
-                    "this is cov"
+                    print "this is cov"
                     print cov
-                action = np.random.multivariate_normal(mu, cov)
+                diag = np.minimum(np.diag(cov), 0.3)
+                print mu
+                action = np.random.normal(mu, diag, size=(2,))
             except:
                 print "Nan detected"
                 action = mu
