@@ -3,6 +3,7 @@
 import os
 import math
 import time
+import sys
 import random
 import keras
 import numpy as np
@@ -194,21 +195,30 @@ class Agent(object):
             t_q_weights[i] = self.tau*q_weights[i] + (1-self.tau)*t_q_weights[i]
         self.target_q_network.set_weights(t_q_weights)
 
+    def is_pos_def(self, x):
+        return np.all(np.linalg.eigvals(x) >= 0)
+
     def get_action(self, x):
         mu = self.mu(x)[0][0]
         p = self.p(x)[0][0]
         l = self.l(x)
+
+        if not self.is_pos_def(p):
+            print "p is not positive definite"
+            sys.exit()
 
         if self.action_dim == 1:
             std = np.minimum(self.noise_scale/p, 1.0)
             action = np.random.normal(mu, std, size=(1,))
         else:
             try:
-                pp = np.linalg.inv(p)
-
-                cov = np.minimum(np.linalg.inv(p) * self.noise_scale, 1)
+                cov = np.linalg.inv(p) * self.noise_scale
+                if not self.is_pos_def(cov):
+                    "this is cov"
+                    print cov
                 action = np.random.multivariate_normal(mu, cov)
             except:
+                print "Nan detected"
                 action = mu
         if any(np.isnan(action)):
             print "nan detected. place mu instead."

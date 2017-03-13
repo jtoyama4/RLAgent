@@ -46,18 +46,23 @@ class PerlmutterHvp(object):
         a = [K.learning_phase()]
         a.extend(inputs)
 
-        hx_fun = K.function(
+        self.hx_fun = K.function(
                 inputs=a,
                 outputs=Hx_plain_splits,
             )
 
-        return hx_fun
+        return self.hx_fun
 
     def build_eval(self, inputs):
         self.inputs = inputs
         def eval(x):
-            xs = self.target.trainable_weights
-            ret = self.hx_fun([0].extend(self.inputs.extend(xs))) + self.reg_coeff * x
+            ll = [0]
+            xs = self.target.get_weights()
+            print xs
+            ll.extend(self.inputs)
+            ll.extend(xs)
+            #print ll
+            ret = self.hx_fun(ll) + self.reg_coeff * x
             return ret
 
         return eval
@@ -165,14 +170,14 @@ class Agent(object):
                      output_shape=(1,), name="surrogate_loss")
         gradients = K.gradients(surr, weights)
 
-        flat_grad = K.concatenate(gradients)
+        flat_grad = K.concatenate(list(map(K.flatten, gradients)))
 
         #build kl
         #kl = merge([old_mu, old_sigma, tf.stop_gradient(mu), tf.stop_gradient(sigma)], mode=self.kld)
         kl = merge([old_mu, old_sigma, mu, sigma], mode=self.kld, output_shape=(1,))
 
         f_loss = K.function([K.learning_phase(), state, sigma_in, old_mu, old_sigma, q, sampled_action], [surr])
-        f_grad = K.function([K.learning_phase(), state, sigma_in, old_mu, old_sigma, q, sampled_action], flat_grad)
+        f_grad = K.function([K.learning_phase(), state, sigma_in, old_mu, old_sigma, q, sampled_action], [flat_grad])
         f_constraint = K.function([K.learning_phase(), state, sigma_in, old_mu, old_sigma], [kl])
 
         self._hvp_approach.update_opt(kl, policy, [state, sigma_in, old_mu, old_sigma], self.reg_coeff)
@@ -183,13 +188,13 @@ class Agent(object):
         sigma_in = np.float32(np.ones(shape=[self.batch_size, self.action_dim]))
         old_mu, old_sigma = self.policy.predict([state, sigma_in], batch_size=self.batch_size)
 
-        loss_before = self.f_loss([0, state, sigma_in, old_mu, old_sigma, q, action])
+        loss_before = self.f_loss([0, state, sigma_in, old_mu, old_sigma, q, action])[0]
 
-        grad = self.f_grad([0, state, sigma_in, old_mu, old_sigma, q, action])
+        grad = self.f_grad([0, state, sigma_in, old_mu, old_sigma, q, action])[0]
 
         Hx = self._hvp_approach.build_eval([state, sigma_in, old_mu, old_sigma])
 
-        descent_direction = self.cg(Hx, np.array(grad), cg_iters=self.cg_iters)
+        descent_direction = self.cg(Hx, grad, cg_iters=self.cg_iters)
 
         initial_step_size = np.sqrt(
             2.0 * self._max_constraint_val *
@@ -208,8 +213,8 @@ class Agent(object):
             cur_step = ratio * flat_descent_step
             cur_param = prev_param - cur_step
             self.policy.set_weights(cur_param, trainable=True)
-            loss = self.f_loss([0, state, sigma_in, old_mu, old_sigma, q, action])
-            constraint_val = self.f_constraint([0, state, sigma_in, old_mu, old_sigma])
+            loss = self.f_loss([0, state, sigma_in, old_mu, old_sigma, q, action])[0]
+            constraint_val = self.f_constraint([0, state, sigma_in, old_mu, old_sigma])[0]
             if loss < loss_before and constraint_val <= self._max_constraint_val:
                 break
 
