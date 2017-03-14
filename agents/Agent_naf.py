@@ -42,8 +42,8 @@ class Agent(object):
         self.W_constraint = maxnorm(10)
         self.replay_memory = deque()
 
-        self.x, self.u, self.mu, self.v, self.q, self.p, self.q_network, self.l = self.build_network()
-        self.tx, self.tu, self.tmu, self.tv, self.tq, self.tp, self.target_q_network, self.tl = self.build_network(t_bool=True)
+        self.x, self.u, self.mu, self.v, self.q, self.p, self.q_network, self.l, self.a = self.build_network()
+        self.tx, self.tu, self.tmu, self.tv, self.tq, self.tp, self.target_q_network, self.tl, self.ta = self.build_network(t_bool=True)
 
         self.target_q_network.set_weights(self.q_network.get_weights())
         self.sess = tf.InteractiveSession()
@@ -129,8 +129,8 @@ class Agent(object):
             mu, p, u = t
             d = K.expand_dims(u-mu, -1)
             #d = u-mu
-            return -0.5 * K.batch_dot(K.batch_dot(K.permute_dimensions(d, (0,2,1)), p), d)
-            #return -0.5 * K.batch_dot(K.batch_dot(K.transpose(d), p), d)
+            a = -0.5 * K.batch_dot(K.batch_dot(K.permute_dimensions(d, (0,2,1)), p), d)
+            return K.reshape(a, (K.shape(a)[0],1))
 
     def _Q(self,t):
         v, a = t
@@ -148,29 +148,29 @@ class Agent(object):
             h = BatchNormalization()(x)
         else:
             h = x
-        h_m = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
+        h_m = Dense(200, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
         h_m = BatchNormalization()(h_m)
-        h_m = Dense(100, activation='tanh', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_m)
+        h_m = Dense(200, activation='tanh', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_m)
 
-        h_v = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
+        h_v = Dense(200, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
         h_v = BatchNormalization()(h_v)
-        h_v = Dense(100, activation='tanh', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_v)
+        h_v = Dense(200, activation='tanh', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_v)
 
-        h_l = Dense(100, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
+        h_l = Dense(200, activation='relu', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h)
         h_l = BatchNormalization()(h_l)
-        h_l = Dense(100, activation='tanh', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_l)
+        h_l = Dense(200, activation='tanh', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_l)
         
         mu = Dense(self.action_dim, activation='tanh')(h_m)
 
-        v = Dense(1, W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_v)
+        v = Dense(1, activation='linear', W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_v)
 
-        l0 = Dense(self.action_dim * (self.action_dim + 1) / 2, name=self.namer('l0', t_bool),
+        l0 = Dense(self.action_dim * (self.action_dim + 1) / 2, activation='linear', name=self.namer('l0', t_bool),
                    W_constraint=self.W_constraint, W_regularizer=self.W_regularizer)(h_l)
         l = Lambda(self._L, output_shape=(self.action_dim, self.action_dim), name=self.namer('l', t_bool))(l0)
         p = Lambda(self._P, output_shape=(self.action_dim, self.action_dim), name=self.namer('p', t_bool))(l)
 
-        a = merge([mu, p, u], mode=self._A, output_shape=(self.action_dim,), name=self.namer("a", t_bool))
-        q = merge([v, a], mode=self._Q, output_shape=(self.action_dim,), name=self.namer("q", t_bool))
+        a = merge([mu, p, u], mode=self._A, output_shape=(1,), name=self.namer("a", t_bool))
+        q = merge([v, a], mode=self._Q, output_shape=(1,), name=self.namer("q", t_bool))
 
         model = Model(input=[x, u], output=q)
         #model.summary()
@@ -182,11 +182,13 @@ class Agent(object):
         p_model = lambda x: fp([0, x])
         fv = K.function([K.learning_phase(), x], [v])
         v_model = lambda x: fv([0, x])
+        fa = K.function([K.learning_phase(), x, u], [a])
+        a_model = lambda x,y: fa([0, x, y])
 
         adam = Adam(lr=self.learning_rate)
         model.compile(loss='mse', optimizer=adam)
 
-        return x, u, mu_model, v_model, q, p_model, model, l_model
+        return x, u, mu_model, v_model, q, p_model, model, l_model, a_model
 
     def update_t(self):
         q_weights = self.q_network.get_weights()
@@ -196,36 +198,39 @@ class Agent(object):
         self.target_q_network.set_weights(t_q_weights)
 
     def is_pos_def(self, x):
-        return np.all(np.linalg.eigvals(x) >= 0)
-
+        try:
+            return np.all(np.linalg.eigvals(x) >= 0)
+        except:
+            return True
     def get_action(self, x):
         mu = self.mu(x)[0][0]
         p = self.p(x)[0][0]
-        l = self.l(x)
-
-        if not self.is_pos_def(p):
+        
+        
+        """if not self.is_pos_def(p):
             print "p is not positive definite"
-
+        """
         if self.action_dim == 1:
             std = np.minimum(self.noise_scale/p, 1.0)
             action = np.random.normal(mu, std, size=(1,))
         else:
             try:
                 cov = np.linalg.inv(p) * self.noise_scale
-                if not self.is_pos_def(cov):
+                """if not self.is_pos_def(cov):
                     print "this is cov"
                     print cov
-                diag = np.minimum(np.diag(cov), 0.3)
-                print mu
+                """
+                diag = np.minimum(np.diag(cov), 5)
                 action = np.random.normal(mu, diag, size=(2,))
+                print "mu:", mu, "  std:", diag, " diag:", np.diag(cov), " action", action
             except:
                 print "Nan detected"
                 action = mu
         if any(np.isnan(action)):
             print "nan detected. place mu instead."
-            action = mu
+            action = np.random.normal(mu, [5,5], size=(2,))
         action = np.clip(action, self.action_bound[0], self.action_bound[1])
-
+        
         return action
 
     def state_shaping(self, state):
@@ -262,10 +267,22 @@ class Agent(object):
             np.float32(np.array(next_state_batch))
             )[0]
 
+        """
+        ls = self.a(
+            np.float32(np.array(state_batch)),
+            np.float32(np.array(action_batch)),
+            )[0]
+
+        
+        ls = self.l(
+            np.float32(np.array(state_batch))
+            )[0]
+        """
+
         reward_batch = np.array(reward_batch)
 
         y_batch = np.float32(reward_batch[:, None] + self.gamma * target_value_batch)
-        y_batch = np.tile(y_batch, (1, self.action_dim))
+        #y_batch = np.tile(y_batch, (1, self.action_dim))
         loss = self.q_network.train_on_batch([
             np.float32(np.array(state_batch)),
             np.float32(np.array(action_batch))], y_batch
