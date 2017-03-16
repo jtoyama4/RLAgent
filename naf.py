@@ -7,13 +7,13 @@ import argparse
 
 def play(gym_mode, target=None):
     BUFFER_SIZE = 100000
-    GAMMA = 0.95
+    GAMMA = 0.97
     TAU = 0.001
     LEARNING_RATE = 0.001
     NUM_EPISODES = 10000
     INITIAL_REPLAY_SIZE = 100
     BATCH_SIZE = 100
-    NOISE_SCALE=0.3
+    NOISE_SCALE=0.5
     ITERATION = 1
     BATCH_BOOL = True
     MOTORS=[7,8,9,10]
