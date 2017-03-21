@@ -10,7 +10,7 @@ import os
 
 cur_dir = os.getcwd()
 
-env = gym.make("Reacher-v1")
+env = gym.make("ReacherBasic-v1")
 try:
     ACTION_DIM = env.action_space.shape[0]
 except AttributeError:
@@ -71,24 +71,27 @@ def calculate_likelihood(t):
     mus, sigmas, xs = t
     #print mus
     #print xs
-    log_like = 0.0
+    log_like = 0
+    
     for mu, sigma, x in zip(mus, sigmas, xs):
+        c=0
         for m, s, x_elem in zip(mu, sigma, x):
+            sigma = 0.01
             tmp = -0.5 * math.log(2*math.pi) - 0.5 * math.log(s) - (x_elem-m)**2 / (2.0*s)
             log_like += tmp
+            #print "%d:%f" % (c,tmp)
+            c += 1
     #like = (1.0 / K.sqrt(2.0 * math.pi * sigma)) * K.exp(-0.5 * (x-mu)**2 / sigma)
     return log_like
 
 
 def predict_trajectory(actions, states):
-    generative_model = load_model('%s/dynamics/generator_half.hdf5'% cur_dir,
+    generative_model = load_model('%s/dynamics/generator_try.hdf5'% cur_dir,
                                   custom_objects={"gated_activation":gated_activation})
 
     state_zeros = np.zeros((H-1, STATE_DIM))
     action_zeros = np.zeros((H-1, ACTION_DIM))
-
     log_like = 0.0
-
     count = 0
 
     for state, action in zip(states, actions):
@@ -104,7 +107,7 @@ def predict_trajectory(actions, states):
             u_m = action[i: i+H]
             u_p = action[i+H: i+2*H]
             x_m = state[i: i+H]
-            print x_m[:3]
+            #print x_m[:3]
 
             u_m = np.expand_dims(u_m, 0)
             u_p = np.expand_dims(u_p, 0)
@@ -114,28 +117,25 @@ def predict_trajectory(actions, states):
             for _ in xrange(100):
                 z = np.random.normal(loc=0.0, scale=1.0, size=(1, z_dim))
                 pred_state = generative_model.predict([x_m, u_p, u_m, z])[0]
+                print pred_state[1][4]
                 samples.append(pred_state)
-            print "sample", samples[:3]
+            #print "sample", samples[:3]
             mean = np.mean(samples, axis=0)
             sigma = np.var(samples, axis=0)
-            print "sigma", sigma[:3]
-            print mean[3]
+            print "sigma", sigma[3]
+            print "mean", mean[3]
 
             true = state[i+H:i+2*H]
-            print true[3]
-
-
-            tmp = calculate_likelihood([mean, sigma, true])
+            print "true", true[3]
+            
+            tmp = calculate_likelihood([mean[:2], sigma[:2], true[:2]])
 
             print tmp
 
-            sys.exit()
-
             log_like += tmp
 
-            state = pred_state
-
             count += 1
+            sys.exit()
 
     return log_like / count
 

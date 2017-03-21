@@ -70,7 +70,7 @@ def play(gym_mode, target=None):
         tmp_a = []
         tmp_s = []
         while not terminal:
-            env.render()
+            #env.render()
             action = get_action(prev_action, ACTION_BOUND, ACTION_DIM)
             next_state, reward, terminal, _ = env.step(action)
 

@@ -29,6 +29,10 @@ class Temporal_dynamics_action_prior(object):
         self.H = h_size
         self.batch_size = batch_size
         self.action_prior, self.generator, self.vae_loss = self.build_network()
+        config = tf.ConfigProto()
+        config.gpu_options.allow_growth=True
+        self.sess = tf.InteractiveSession(config=config)
+        tf.global_variables_initializer().run()
 
     def build_network(self):
         u_plus_ph = Input(shape=[self.H, self.action_dim], name="u_plus")

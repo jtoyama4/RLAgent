@@ -14,7 +14,7 @@ import gym
 from dynamics.Temporal_Dynamics import Dynamics_Model
 
 def get_action(prev_action, bounds, action_dim):
-    action = prev_action + np.random.normal(size=(action_dim,))/3.0
+    action = prev_action + np.random.normal(size=(action_dim,)) * 0.03
     action = np.clip(action, bounds[0], bounds[1])
     return action
 
@@ -32,7 +32,7 @@ def play(gym_mode, target=None):
     ITERATION = 1
     BATCH_BOOL = True
     MOTORS = [7, 8, 9, 10]
-    EPOCH = 30
+    EPOCH = 40
 
     np.random.seed(1234)
 

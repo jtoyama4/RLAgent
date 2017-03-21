@@ -27,7 +27,13 @@ class Dynamics_Model(object):
         self.H = h_size
         self.batch_size = batch_size
         self.vae, self.generator, self.vae_loss = self.build_network()
-        self.sess = tf.InteractiveSession()
+
+        config = tf.ConfigProto(
+                gpu_options=tf.GPUOptions(
+                            allow_growth=True
+                        )
+            )
+        self.sess = tf.InteractiveSession(config=config)
         tf.global_variables_initializer().run()
         self.vae.summary()
         self.generator.summary()
@@ -241,7 +247,9 @@ class Dynamics_Model(object):
 
         self.vae.compile(optimizer="Adam", loss=self.vae_loss)
 
-        self.vae.fit([xp, xm, up, um], xp, epochs=epoch, validation_split=0.05)
+        epoch2 = 60
+        
+        self.vae.fit([xp, xm, up, um], xp, epochs=epoch2, validation_split=0.05)
 
         save_model(self.generator, './dynamics/generator_try.hdf5')
 
