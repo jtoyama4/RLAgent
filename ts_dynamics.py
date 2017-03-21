@@ -23,7 +23,7 @@ def play(gym_mode, target=None):
     GAMMA = 0.97
     TAU = 0.001
     LEARNING_RATE = 0.001
-    NUM_EPISODES = 5
+    NUM_EPISODES = 1000
     INITIAL_REPLAY_SIZE = 100
     BATCH_SIZE = 100
     Z_DIM=8
@@ -32,18 +32,19 @@ def play(gym_mode, target=None):
     ITERATION = 1
     BATCH_BOOL = True
     MOTORS = [7, 8, 9, 10]
-    EPOCH = 50
+    EPOCH = 30
 
     np.random.seed(1234)
 
     if gym_mode:
-        env = gym.make("Reacher-v1")
+        env = gym.make("ReacherBasic-v1")
         # env = gym.make("Pendulum-v0")
         try:
             ACTION_DIM = env.action_space.shape[0]
         except AttributeError:
             ACTION_DIM = 1
         STATE_DIM = env.observation_space.shape[0]
+        print STATE_DIM
         ACTION_BOUND = [-env.action_space.high, env.action_space.high]
         print "action bound ", ACTION_BOUND
         print env.action_space.shape

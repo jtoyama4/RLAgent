@@ -35,7 +35,7 @@ def play(gym_mode):
     np.random.seed(1234)
 
     if gym_mode:
-        env = gym.make("Swimmer-v1")
+        env = gym.make("InvertedDoublePendulum-v1")
         try:
             ACTION_DIM = env.action_space.shape[0]
         except AttributeError:
@@ -43,6 +43,7 @@ def play(gym_mode):
         STATE_DIM = env.observation_space.shape[0]
         ACTION_BOUND = [-env.action_space.high, env.action_space.high]
         print env.action_space.shape
+        print "action_bound: ",ACTION_BOUND
     else:
         from envs.Arm_image import Arm
         ACTION_DIM = len(MOTORS)
@@ -90,7 +91,7 @@ def play(gym_mode):
             q_list += estimate_q(r_tmp)
         agent.run(s_list, a_list, q_list)
 
-        print total_reward
+        print total_reward/NUM_PATH
         if not gym_mode:
             if rospy.is_shutdown():
                 break

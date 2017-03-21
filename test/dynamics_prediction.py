@@ -6,6 +6,9 @@ import gym
 from keras.models import load_model
 from keras import backend as K
 import math
+import os
+
+cur_dir = os.getcwd()
 
 env = gym.make("Reacher-v1")
 try:
@@ -78,7 +81,7 @@ def calculate_likelihood(t):
 
 
 def predict_trajectory(actions, states):
-    generative_model = load_model('/Users/jouji/Projects/arm/RLAgent/dynamics/generator_half.hdf5',
+    generative_model = load_model('%s/dynamics/generator_half.hdf5'% cur_dir,
                                   custom_objects={"gated_activation":gated_activation})
 
     state_zeros = np.zeros((H-1, STATE_DIM))
@@ -108,7 +111,7 @@ def predict_trajectory(actions, states):
             x_m = np.expand_dims(x_m, 0)
 
             samples = []
-            for _ in xrange(20):
+            for _ in xrange(100):
                 z = np.random.normal(loc=0.0, scale=1.0, size=(1, z_dim))
                 pred_state = generative_model.predict([x_m, u_p, u_m, z])[0]
                 samples.append(pred_state)
@@ -116,12 +119,13 @@ def predict_trajectory(actions, states):
             mean = np.mean(samples, axis=0)
             sigma = np.var(samples, axis=0)
             print "sigma", sigma[:3]
-            print mean[:3]
+            print mean[3]
 
             true = state[i+H:i+2*H]
-            print true[:3]
+            print true[3]
 
-            tmp = calculate_likelihood([mean[:1], sigma[:1], true[:1]])
+
+            tmp = calculate_likelihood([mean, sigma, true])
 
             print tmp
 

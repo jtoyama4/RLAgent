@@ -4,7 +4,7 @@ import numpy as np
 import keras
 import tensorflow as tf
 from keras.models import Model, save_model
-from keras.layers.merge import concatenate
+from keras.layers.merge import Concatenate, concatenate
 from keras.layers import Input, Lambda
 from keras.layers import Convolution1D as Conv1d
 from keras.layers.core import Flatten, Dense, Reshape
@@ -56,6 +56,7 @@ class Dynamics_Model(object):
             eps = K.random_normal(shape=(self.z_dim,), mean=0.0, stddev=1.0)
             return z_mean + eps * z_std
 
+        
         z = Lambda(sampling, output_shape=(self.z_dim,))([mu, sigma])
 
         #decoder
@@ -86,10 +87,11 @@ class Dynamics_Model(object):
 
         lambda3 = Lambda(self.gated_activation, name='gate_3')
 
-        last = Conv1d(110, 1, name='last_layer')
+        last = Conv1d(self.H*self.state_dim, 1, name='last_layer')
 
-        in_px = concatenate([x_m, u_plus, u_m], axis=-1)
-
+        in_px = concatenate([x_m, u_plus, u_m], -1)
+        #in_px = Lambda(lambda x: K.concatenate, name="concat")([x_m, u_plus, u_m])
+        
         xx1 = x_layer_1(in_px)
         yy1 = y_layer_1(in_px)
 
@@ -116,6 +118,8 @@ class Dynamics_Model(object):
 
         atrous_out = last(atrous_out)
 
+        print atrous_out.shape
+
         x_plus = Reshape((self.H, self.state_dim))(atrous_out)
 
         vae = Model([x_plus_ph, x_m, u_plus, u_m], x_plus)
@@ -133,7 +137,7 @@ class Dynamics_Model(object):
 
         optimize = keras.optimizers.RMSprop(lr=0.001, rho=0.9, epsilon=1e-08, decay=0.0)
 
-        vae.compile(optimizer="Adam", loss='mse')
+        vae.compile(optimizer="adam", loss='mean_squared_logarithmic_error')
 
         #generator
         sampled_z = Input(shape=(self.z_dim,))
@@ -239,7 +243,7 @@ class Dynamics_Model(object):
 
         self.vae.fit([xp, xm, up, um], xp, epochs=epoch, validation_split=0.05)
 
-        save_model(self.generator, './dynamics/generator_half.hdf5')
+        save_model(self.generator, './dynamics/generator_try.hdf5')
 
         generated_xp = self.generator.predict([test_xm, test_up, test_um, test_z])
 

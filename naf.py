@@ -13,8 +13,8 @@ def play(gym_mode, target=None):
     NUM_EPISODES = 10000
     INITIAL_REPLAY_SIZE = 100
     BATCH_SIZE = 100
-    NOISE_SCALE=0.5
-    ITERATION = 1
+    NOISE_SCALE=1.0
+    ITERATION = 4
     BATCH_BOOL = True
     MOTORS=[7,8,9,10]
 
@@ -77,7 +77,7 @@ if __name__ == '__main__':
     parser.add_argument('--target', default=None)
     args = parser.parse_args()
     gym_mode = args.gym
-    log = open('log.txt', 'a')
+    log = open('log.txt', 'w')
     if args.target:
         target = np.load(args.target)
     if gym_mode:
