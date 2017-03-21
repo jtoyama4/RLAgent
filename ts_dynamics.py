@@ -8,8 +8,6 @@ from keras.layers import Input, Lambda
 from keras.layers import Convolution1D as Conv1d
 from keras.layers.core import Flatten, Dense, Reshape
 from keras.layers import AtrousConv1D as Atrous1d
-import edward as ed
-from edward.models import Normal
 from keras import backend as K
 import argparse
 import gym
