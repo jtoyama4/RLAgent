@@ -68,7 +68,7 @@ class Temporal_dynamics_action_prior(object):
         sig_dense_3 = Dense(32, name="z_dense_sigm_3")
         lambda3 = Lambda(self.gated_activation, name='gate_3')
 
-        last_layer = Conv1d(self.H*self.state_dim, 1, name='last_layer')
+        last_layer = Conv1d(self.H*self.action_dim, 1, name='last_layer')
         #decoder
 
         tanh_elem = tan_layer_1(u_m)
@@ -90,7 +90,7 @@ class Temporal_dynamics_action_prior(object):
         px_h = lambda3([tanh_elem, sigm_elem, tanh_z, sigm_z])
 
         u_plus = last_layer(px_h)
-        u_plus = Reshape((self.H, self.state_dim))(u_plus)
+        u_plus = Reshape((self.H, self.action_dim))(u_plus)
 
         def vae_loss(x_original, x_generated):
             square_loss = K.mean((x_original - x_generated)**2)
@@ -122,7 +122,7 @@ class Temporal_dynamics_action_prior(object):
         px_h = lambda3([tanh_elem, sigm_elem, tanh_z, sigm_z])
 
         u_plus = last_layer(px_h)
-        u_plus = Reshape((self.H, self.state_dim))(u_plus)
+        u_plus = Reshape((self.H, self.action_dim))(u_plus)
 
         generator = Model([u_m, sampled_z], u_plus)
 
