@@ -28,7 +28,7 @@ class Temporal_dynamics_action_prior(object):
         self.z_dim = z_dim
         self.H = h_size
         self.batch_size = batch_size
-        self.action_prior = self.build_network()
+        self.action_prior, self.vae_loss = self.build_network()
 
     def build_network(self):
         u_plus_ph = Input(shape=[self.H, self.action_dim], name="u_plus")
@@ -99,7 +99,7 @@ class Temporal_dynamics_action_prior(object):
 
         vae = Model([u_plus_ph, u_m], u_plus)
 
-        vae.compile(optimizer='rmsprop', loss=vae_loss)
+        vae.compile(optimizer='rmsprop', loss="mse")
 
         sampled_z = Input(shape=(self.z_dim,))
 
@@ -126,7 +126,7 @@ class Temporal_dynamics_action_prior(object):
 
         generator = Model([u_m, sampled_z], u_plus)
 
-        return vae
+        return vae, vae_loss
 
     def gated_activation(self, t):
         x1, y1, z, zz = t
@@ -177,6 +177,10 @@ class Temporal_dynamics_action_prior(object):
         test_z = np.random.normal(loc=0.0, scale=1.0, size=(self.H, self.z_dim))
 
         self.action_prior.fit([up, um], up, epochs=epoch, validation_split=0.05)
+
+        self.action_prior.compile(optimizer="rmsprop", loss=self.vae_loss)
+
+        self.action_prior.compile([up, um], up, epochs=epoch, validation_split=0.05)
 
         save_model(self.action_prior, './dynamics/action_prior.hdf5')
 
