@@ -4,7 +4,7 @@ import numpy as np
 import keras
 import tensorflow as tf
 from keras.models import Model, save_model
-from keras.layers import merge
+from keras.layers.merge import concatenate
 from keras.layers import Input, Lambda
 from keras.layers import Convolution1D as Conv1d
 from keras.layers.core import Flatten, Dense, Reshape
@@ -88,7 +88,7 @@ class Dynamics_Model(object):
 
         last = Conv1d(110, 1, name='last_layer')
 
-        in_px = merge([x_m, u_plus, u_m], mode="concat", concat_axis=-1)
+        in_px = concatenate([x_m, u_plus, u_m], axis=-1)
 
         xx1 = x_layer_1(in_px)
         yy1 = y_layer_1(in_px)
