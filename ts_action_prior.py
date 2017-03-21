@@ -13,7 +13,7 @@ from edward.models import Normal
 from keras import backend as K
 import argparse
 import gym
-from dynamics.Temporal_Dynamics import Dynamics_Model
+from dynamics.Agent_prior import Temporal_dynamics_action_prior
 
 def get_action(prev_action, bounds, action_dim):
     action = prev_action + np.random.normal(size=(action_dim,))/3.0
@@ -25,7 +25,7 @@ def play(gym_mode, target=None):
     GAMMA = 0.97
     TAU = 0.001
     LEARNING_RATE = 0.001
-    NUM_EPISODES = 500
+    NUM_EPISODES = 1500
     INITIAL_REPLAY_SIZE = 100
     BATCH_SIZE = 100
     Z_DIM=8
@@ -34,7 +34,7 @@ def play(gym_mode, target=None):
     ITERATION = 1
     BATCH_BOOL = True
     MOTORS = [7, 8, 9, 10]
-    EPOCH = 50
+    EPOCH = 150
 
     np.random.seed(1234)
 
@@ -60,9 +60,10 @@ def play(gym_mode, target=None):
     actions = []
     states = []
 
-    dynamics = Dynamics_Model(ACTION_DIM, STATE_DIM, Z_DIM, H_SIZE, BATCH_SIZE)
+    action_prior = Temporal_dynamics_agent_prior(ACTION_DIM, STATE_DIM, Z_DIM, H_SIZE, BATCH_SIZE)
 
     for n_ep in xrange(NUM_EPISODES):
+        print n_ep
         terminal = False
         state = env.reset()
         t = 0
@@ -71,7 +72,7 @@ def play(gym_mode, target=None):
         tmp_a = []
         tmp_s = []
         while not terminal:
-            #env.render()
+            env.render()
             action = get_action(prev_action, ACTION_BOUND, ACTION_DIM)
             next_state, reward, terminal, _ = env.step(action)
 
@@ -92,7 +93,7 @@ def play(gym_mode, target=None):
         actions.append(tmp_a)
         states.append(tmp_s)
 
-    dynamics.learn(actions, states, EPOCH)
+    action_prior.learn(actions, states, EPOCH)
 
 
 

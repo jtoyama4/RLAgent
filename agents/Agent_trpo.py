@@ -4,6 +4,7 @@ import math
 import time
 import random
 import sys
+import math
 
 import numpy as np
 import tensorflow as tf
@@ -101,7 +102,7 @@ class Agent(object):
     def calculate_likelihood(self, t):
         mu, sigma, x = t
          #log_like = -0.5 * K.log(2*3.14) - 0.5 * K.log(sigma) - (x-mu)**2 / (2.0*sigma)
-        like = (2.0*3.14*sigma)**(-0.5) * K.exp(-0.5 * (x-mu)**2 / sigma)
+        like = (1.0 / K.sqrt(2.0 * math.pi * sigma)) * K.exp(-0.5 * (x-mu)**2 / sigma)
         return like
 
     def surrogate_loss(self, t):

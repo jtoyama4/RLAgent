@@ -10,6 +10,7 @@ from keras.layers import Convolution1D as Conv1d
 from keras.layers.core import Flatten, Dense, Reshape
 from keras.layers import AtrousConv1D as Atrous1d
 from keras import backend as K
+from keras.models import load_model
 
 
 import argparse
@@ -25,9 +26,10 @@ class Dynamics_Model(object):
         self.z_dim = z_dim
         self.H = h_size
         self.batch_size = batch_size
-        self.vae, self.generator = self.build_network()
+        self.vae, self.generator, self.vae_loss = self.build_network()
         self.sess = tf.InteractiveSession()
         tf.global_variables_initializer().run()
+        self.vae.summary()
         self.generator.summary()
         plot(self.vae, to_file='vae.png')
         plot(self.generator, to_file='generator')
@@ -42,14 +44,16 @@ class Dynamics_Model(object):
         #encoder
 
         h_1 = Conv1d(32, 2, activation='relu')(x_plus_ph)
-        h_2 = Conv1d(16, 2, subsample_length=2, activation='relu')(h_1)
+        h_2 = Conv1d(16, 2, strides=2, activation='relu')(h_1)
         h_z = Flatten()(h_2)
         mu = Dense(self.z_dim)(h_z)
         sigma = Dense(self.z_dim, activation="softplus")(h_z)
+        #sigma is sigma^2
 
         def sampling(t):
-            z_mean, z_std = t
-            eps = K.random_normal(shape=(self.z_dim,), mean=0., stddev=1.0)
+            z_mean, z_var = t
+            z_std = K.sqrt(z_var)
+            eps = K.random_normal(shape=(self.z_dim,), mean=0.0, stddev=1.0)
             return z_mean + eps * z_std
 
         z = Lambda(sampling, output_shape=(self.z_dim,))([mu, sigma])
@@ -82,7 +86,7 @@ class Dynamics_Model(object):
 
         lambda3 = Lambda(self.gated_activation, name='gate_3')
 
-        last = Dense(self.H * self.state_dim, name='last_layer')
+        last = Conv1d(110, 1, name='last_layer')
 
         in_px = merge([x_m, u_plus, u_m], mode="concat", concat_axis=-1)
 
@@ -109,18 +113,27 @@ class Dynamics_Model(object):
         z2 = z_dense_sig_3(z)
 
         atrous_out = lambda3([xx3, yy3, z1, z2])
-        atrous_out = Flatten()(atrous_out)
 
-        x_plus = last(atrous_out)
+        atrous_out = last(atrous_out)
 
-        def vae_loss(x_original, x_generated):
-            square_loss = K.mean((x_original - x_generated)**2, axis=-1)
-            kl_loss = K.sum(-K.log(sigma) + (K.square(mu) + K.square(sigma)) / 2 - 0.5, axis=-1)
-            return square_loss + kl_loss
+        x_plus = Reshape((self.H, self.state_dim))(atrous_out)
 
         vae = Model([x_plus_ph, x_m, u_plus, u_m], x_plus)
 
-        vae.compile(optimizer='rmsprop', loss=vae_loss)
+        def vae_loss(x_original, x_generated):
+            square_loss = K.mean((x_original - x_generated)**2)
+            kl_loss = K.sum((-0.5*K.log(sigma)) + ((K.square(mu) + sigma) / 2.0) - 0.5)
+            return square_loss + kl_loss
+
+        def mean_squared(y_true, y_pred):
+            #assert K.ndim(y_true) == 3
+            #y_true = K.reshape(y_true, (K.shape(y_true)[0], K.shape(y_true)[1]*K.shape(y_true)[2]))
+            #y_pred = K.reshape(y_true, (K.shape(y_pred)[0], K.shape(y_pred)[1]*K.shape(y_pred)[2]))
+            return K.mean(K.square(y_pred - y_true), axis=-1)
+
+        optimize = keras.optimizers.RMSprop(lr=0.001, rho=0.9, epsilon=1e-08, decay=0.0)
+
+        vae.compile(optimizer="Adam", loss='mse')
 
         #generator
         sampled_z = Input(shape=(self.z_dim,))
@@ -145,12 +158,14 @@ class Dynamics_Model(object):
         z2 = z_dense_sig_3(sampled_z)
 
         g_out = lambda3([xxz3, yyz3, z1, z2])
-        g_out = Flatten()(g_out)
+
         g_out = last(g_out)
+
+        g_out = Reshape((self.H, self.state_dim))(g_out)
 
         generator = Model([x_m, u_plus, u_m, sampled_z], g_out)
 
-        return vae, generator
+        return vae, generator, vae_loss
 
     def gated_activation(self, t):
         x1, y1, z, zz = t
@@ -164,8 +179,8 @@ class Dynamics_Model(object):
         n_traj = len(actions)
         print n_traj
 
-        action_zeros = np.zeros((self.H, self.action_dim))
-        state_zeros = np.zeros((self.H, self.state_dim))
+        action_zeros = np.zeros((self.H-1, self.action_dim))
+        state_zeros = np.zeros((self.H-1, self.state_dim))
         train_xp = []
         train_xm = []
         train_up = []
@@ -184,13 +199,18 @@ class Dynamics_Model(object):
                 train_up.append(u_p)
                 train_um.append(u_m)
 
-
         xp = np.stack(train_xp)
         xm = np.stack(train_xm)
         up = np.stack(train_up)
         um = np.stack(train_um)
 
-        self.vae.fit([xp, xm, up, um], xp.reshape([xp.shape[0],xp.shape[1]*xp.shape[2]]), epochs=epoch)
+        print xp.shape
+        print xp[3]
+        print xm[4]
+
+        #sys.exit()
+
+
         """
         json_vae = self.vae.to_json()
         json_generator = self.generator.to_json()
@@ -201,24 +221,33 @@ class Dynamics_Model(object):
         with open("generator_model.json", 'w') as f:
             f.write(json_generator)
         """
-        #self.vae.get_config()
 
         #save_model(self.vae, 'vae.hdf5')
-        save_model(self.generator, './dynamics/generator.hdf5')
+        #save_model(self.generator, './dynamics/generator.hdf5')
 
         test_xp = np.expand_dims(xp[10], 0)
         test_xm = np.expand_dims(xm[10], 0)
         test_up = np.expand_dims(up[10], 0)
         test_um = np.expand_dims(um[10], 0)
 
-        test_z = np.random.normal(loc=0.0, scale=1.0, size=(self.H, self.z_dim))
+        test_z = np.random.normal(loc=0.0, scale=1.0, size=(1, self.z_dim)).astype("float32")
+
+        self.vae.fit([xp.astype("float32"), xm.astype("float32"), up.astype("float32"),
+                      um.astype("float32")], xp.astype("float32"), epochs=epoch, validation_split=0.05)
+
+        self.vae.compile(optimizer="Adam", loss=self.vae_loss)
+
+        self.vae.fit([xp, xm, up, um], xp, epochs=epoch, validation_split=0.05)
+
+        save_model(self.generator, './dynamics/generator_half.hdf5')
 
         generated_xp = self.generator.predict([test_xm, test_up, test_um, test_z])
 
-        error = np.sum((test_xp.reshape(test_xp.shape[0], test_xp.shape[1]*test_xp.shape[2]) - generated_xp)**2)
+        #error = np.sum((test_xp.reshape(test_xp.shape[0], test_xp.shape[1]*test_xp.shape[2]) - generated_xp)**2)
+        error = np.sum((test_xp - generated_xp) ** 2)
         print error
-        print generated_xp
-        print test_xp.reshape(test_xp.shape[0], test_xp.shape[1]*test_xp.shape[2])
+        #print generated_xp
+        #print test_xp
 
 
 
