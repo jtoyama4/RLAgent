@@ -11,7 +11,7 @@ from keras.layers import AtrousConv1D as Atrous1d
 from keras import backend as K
 import argparse
 import gym
-from dynamics.Agent_prior import Temporal_dynamics_action_prior
+from agents.Agent_prior import Temporal_dynamics_action_prior
 
 def get_action(prev_action, bounds, action_dim):
     action = prev_action + np.random.normal(size=(action_dim,))/3.0
@@ -23,7 +23,7 @@ def play(gym_mode, target=None):
     GAMMA = 0.97
     TAU = 0.001
     LEARNING_RATE = 0.001
-    NUM_EPISODES = 1500
+    NUM_EPISODES = 1000
     INITIAL_REPLAY_SIZE = 100
     BATCH_SIZE = 100
     Z_DIM=8
@@ -32,12 +32,12 @@ def play(gym_mode, target=None):
     ITERATION = 1
     BATCH_BOOL = True
     MOTORS = [7, 8, 9, 10]
-    EPOCH = 150
+    EPOCH = 30
 
     np.random.seed(1234)
 
     if gym_mode:
-        env = gym.make("Reacher-v1")
+        env = gym.make("ReacherBasic-v1")
         # env = gym.make("Pendulum-v0")
         try:
             ACTION_DIM = env.action_space.shape[0]
@@ -58,7 +58,7 @@ def play(gym_mode, target=None):
     actions = []
     states = []
 
-    action_prior = Temporal_dynamics_agent_prior(ACTION_DIM, STATE_DIM, Z_DIM, H_SIZE, BATCH_SIZE)
+    action_prior = Temporal_dynamics_action_prior(ACTION_DIM, STATE_DIM, Z_DIM, H_SIZE, BATCH_SIZE)
 
     for n_ep in xrange(NUM_EPISODES):
         print n_ep

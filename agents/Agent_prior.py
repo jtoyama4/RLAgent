@@ -28,7 +28,7 @@ class Temporal_dynamics_action_prior(object):
         self.z_dim = z_dim
         self.H = h_size
         self.batch_size = batch_size
-        self.action_prior, self.vae_loss = self.build_network()
+        self.action_prior, self.generator, self.vae_loss = self.build_network()
 
     def build_network(self):
         u_plus_ph = Input(shape=[self.H, self.action_dim], name="u_plus")
@@ -68,7 +68,7 @@ class Temporal_dynamics_action_prior(object):
         sig_dense_3 = Dense(32, name="z_dense_sigm_3")
         lambda3 = Lambda(self.gated_activation, name='gate_3')
 
-        last_layer = Conv1d(110, 1, name='last_layer')
+        last_layer = Conv1d(self.H*self.state_dim, 1, name='last_layer')
         #decoder
 
         tanh_elem = tan_layer_1(u_m)
@@ -126,7 +126,7 @@ class Temporal_dynamics_action_prior(object):
 
         generator = Model([u_m, sampled_z], u_plus)
 
-        return vae, vae_loss
+        return vae, generator, vae_loss
 
     def gated_activation(self, t):
         x1, y1, z, zz = t
@@ -174,20 +174,18 @@ class Temporal_dynamics_action_prior(object):
         test_up = np.expand_dims(up[10], 0)
         test_um = np.expand_dims(um[10], 0)
 
-        test_z = np.random.normal(loc=0.0, scale=1.0, size=(self.H, self.z_dim))
+        test_z = np.random.normal(loc=0.0, scale=1.0, size=(1, self.z_dim))
 
         self.action_prior.fit([up, um], up, epochs=epoch, validation_split=0.05)
 
-        self.action_prior.compile(optimizer="rmsprop", loss=self.vae_loss)
+        #self.action_prior.compile(optimizer="rmsprop", loss=self.vae_loss)
 
-        self.action_prior.compile([up, um], up, epochs=epoch, validation_split=0.05)
+        #self.action_prior.fit([up, um], up, epochs=epoch, validation_split=0.05)
 
-        save_model(self.action_prior, './dynamics/action_prior.hdf5')
+        save_model(self.generator, './dynamics/action_prior.hdf5')
 
-        generated_xp = self.action_prior.predict([test_um, test_z])
+        #generated_up = self.action_prior.predict([test_um, test_z])
 
         #error = np.sum((test_xp.reshape(test_xp.shape[0], test_xp.shape[1]*test_xp.shape[2]) - generated_xp)**2)
-        error = np.sum((test_xp - generated_xp) ** 2)
-        print error
-        print generated_xp
-        print test_xp
+        #error = np.sum((test_up - generated_up) ** 2)
+
