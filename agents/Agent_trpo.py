@@ -147,13 +147,13 @@ class Agent(object):
         #h = BatchNormalization()(h)
         h_m = Dense(30, activation='tanh')(h)
         #h = BatchNormalization()(h)
-        mu = Dense(self.action_dim)(h_m)
+        mu = Dense(self.action_dim, activation="linear")(h_m)
 
         #h_v = Dense(30, activation='tanh')(h)
         #v = Dense(self.action_dim)(h_v)
 
         log_sigma = Dense(20, activation='tanh')(state)
-        log_sigma = Dense(self.action_dim, activation='tanh')(log_sigma)
+        log_sigma = Dense(self.action_dim, activation='linear')(log_sigma)
         sigma = Lambda(lambda x: K.exp(x))(log_sigma)
 
         policy = Model([state], [mu, sigma], name="policy")
@@ -267,7 +267,7 @@ class Agent(object):
 
             likes = self.f_loglike([0, state,  old_mu, old_sigma, action])
             print "before like %f after like %f" % (np.mean(likes[1]), np.mean(likes[0]))
-            print old_mu[100:110]
+            #print old_mu[100:110]
 
             print "before:%f after:%f kl %f max_kl %f" % (loss_before, loss, constraint_val, self._max_constraint_val)
             print >> self.log, "before:%f after:%f kl %f max_kl %f" % (loss_before, loss, constraint_val, self._max_constraint_val)
@@ -287,11 +287,12 @@ class Agent(object):
 
     def get_action(self, state):
         mu, sigma = self.policy.predict([state])
+        #print "mu:", mu
         sdv = np.sqrt(sigma)
         action = np.random.normal(mu, sdv)
 
         action = np.clip(action, self.action_bound[0], self.action_bound[1])
-
+        #print "ac:", action
         return action
 
     def run(self, state, action, q):
