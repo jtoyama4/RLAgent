@@ -63,15 +63,6 @@ def sampling_trajectory(NUM_EPISODES):
     return actions, states
 
 
-def gated_activation(t):
-    x1, y1, z, zz = t
-
-    x = K.tanh(x1 + z[:, None, :])
-    y = K.sigmoid(y1 + zz[:, None, :])
-
-    return x * y
-
-
 def slicing(t, ix):
     c_u, c_x = t
     begin_index = tf.constant([0, ix, 0])
@@ -100,9 +91,7 @@ class Generator(object):
 
     def layer_const(self, layer):
         name = layer.name
-        print layer.get_config()
         weight = layer.get_weights()
-        print type(weight)
         self.variables[name] = layer
         return layer
 
@@ -133,6 +122,14 @@ class Generator(object):
         self.lambda3 = self.layer_const(Lambda(self.gated_activation, name='gate_3'))
 
         self.last = self.layer_const(Conv1d(self.state_dim, 1, name='last_layer'))
+
+    def gated_activation(self, t):
+        x1, y1, z, zz = t
+
+        x = K.tanh(x1 + z[:, None, :])
+        y = K.sigmoid(y1 + zz[:, None, :])
+
+        return x * y
 
     def build_generator(self):
         # generator
@@ -218,7 +215,7 @@ def calculate_likelihood(t):
 
 
 def predict_trajectory(actions, states):
-    instance = Generator()
+    instance = Generator(ACTION_DIM, STATE_DIM, z_dim, H)
     dynamics = instance.generator
     saver = tf.train.Saver()
     saver.restore(instance.sess, "/tmp/vae_dynamics.model")
@@ -238,9 +235,9 @@ def predict_trajectory(actions, states):
             x_m = np.expand_dims(x_m, 0)
 
             samples = []
-            for _ in xrange(100):
+            for _ in xrange(2):
                 z = np.random.normal(loc=0.0, scale=1.0, size=(1, z_dim))
-                pred_state = dynamics.predict([x_m, u_p, u_m, z])[0]
+                pred_state = dynamics([0, x_m, u_p, u_m, z])[0][0]
                 samples.append(pred_state)
             #print "sample", samples[:3]
             mean = np.mean(samples, axis=0)
