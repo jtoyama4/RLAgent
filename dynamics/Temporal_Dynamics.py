@@ -53,7 +53,7 @@ class Dynamics_Model(object):
         h_2 = Conv1d(16, 2, strides=2, activation='relu')(h_1)
         h_z = Flatten()(h_2)
         mu = Dense(self.z_dim)(h_z)
-        sigma = Dense(self.z_dim, activation="softplus")(h_z)
+        var = Dense(self.z_dim, activation="softplus")(h_z)
         #sigma is sigma^2
 
         def sampling(t):
@@ -63,7 +63,7 @@ class Dynamics_Model(object):
             return z_mean + eps * z_std
 
         
-        z = Lambda(sampling, output_shape=(self.z_dim,))([mu, sigma])
+        z = Lambda(sampling, output_shape=(self.z_dim,))([mu, var])
 
         #decoder
 
@@ -132,7 +132,7 @@ class Dynamics_Model(object):
 
         def vae_loss(x_original, x_generated):
             square_loss = K.mean((x_original - x_generated)**2)
-            kl_loss = K.sum((-0.5*K.log(sigma)) + ((K.square(mu) + sigma) / 2.0) - 0.5)
+            kl_loss = K.sum((-0.5*K.log(var)) + ((K.square(mu) + var) / 2.0) - 0.5)
             return square_loss + kl_loss
 
         def mean_squared(y_true, y_pred):
