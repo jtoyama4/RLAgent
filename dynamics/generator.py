@@ -5,7 +5,7 @@ import tensorflow as tf
 from keras.layers.merge import concatenate
 from keras.layers import Input, Lambda
 from keras.layers import Convolution1D as Conv1d
-from keras.layers.core import Dense
+from keras.layers.core import Dense, Flatten
 from keras import backend as K
 import math
 import os
@@ -70,11 +70,32 @@ class Generator(object):
         return x * y
 
     def build_generator(self):
-        # generator
         x_m = Input(shape=[self.H, self.state_dim], name="x_min")
         u_plus = Input(shape=[self.H, self.action_dim], name="u_plus")
         u_m = Input(shape=[self.H, self.action_dim], name="u_min")
-        sampled_z = Input(shape=(self.z_dim,))
+        x_plus_ph = Input(shape=[self.H, self.state_dim], name="x_plus")
+        # encoder
+
+        h_1 = Conv1d(32, 2, activation='relu')(x_plus_ph)
+        h_2 = Conv1d(16, 2, strides=2, activation='relu')(h_1)
+        h_z = Flatten()(h_2)
+        mu = Dense(self.z_dim)(h_z)
+        var = Dense(self.z_dim, activation="softplus")(h_z)
+
+        def sampling(t):
+            z_mean, z_var = t
+            z_std = K.sqrt(z_var)
+            eps = K.random_normal(shape=(self.z_dim,), mean=0.0, stddev=1.0)
+            return z_mean + eps * z_std
+
+        def vae_loss_f(x_original, x_generated):
+            square_loss = K.mean((x_original - x_generated)**2)
+            kl_loss = K.sum((-0.5*K.log(var)) + ((K.square(mu) + var) / 2.0) - 0.5)
+            return square_loss + kl_loss
+
+        z = Lambda(sampling, output_shape=(self.z_dim,), name="sampling_lambda")([mu, var])
+
+        # decoder
 
         def slicing(t, ix):
             c_u, c_x = t
@@ -84,6 +105,26 @@ class Generator(object):
             x = tf.slice(c_x, begin_index, size_index)
             k = tf.concat([u, x], axis=-1)
             return k
+
+        connected_u = concatenate([u_m, u_plus], axis=1)
+        connected_x = x_m
+
+        x_plus = []
+        for idx in xrange(self.H):
+            arg = {"ix": idx}
+            in_px = Lambda(slicing, arguments=arg, name='slicing_lambda',
+                           output_shape=(self.H*2, self.state_dim+self.action_dim))([connected_u, connected_x])
+
+            atrous_out = self.dilated_causal_conv(in_px, z)
+            connected_x = concatenate([connected_x, atrous_out], axis=1)
+
+            x_plus.append(atrous_out)
+
+        x_plus = concatenate(x_plus, axis=1)
+
+        # generator
+
+        sampled_z = Input(shape=(self.z_dim,))
 
         connected_u = concatenate([u_m, u_plus], axis=1)
         connected_x = x_m
