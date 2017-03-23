@@ -197,8 +197,8 @@ class Dynamics_Model(object):
         train_um = []
 
         for n in xrange(n_traj):
-            action = np.concatenate([action_zeros, np.array(actions[n])], axis=0)
-            state = np.concatenate([state_zeros, np.array(states[n])], axis=0)
+            action = np.array(actions[n]).astype("float32")
+            state = np.array(states[n]).astype("float32")
             for i in xrange(len(action) - 2*self.H):
                 x_p = state[i + self.H: i + 2 * self.H]
                 x_m = state[i: i+self.H]
@@ -243,15 +243,15 @@ class Dynamics_Model(object):
         test_z = np.random.normal(loc=0.0, scale=1.0, size=(1, self.z_dim)).astype("float32")
 
         self.vae.fit([xp.astype("float32"), xm.astype("float32"), up.astype("float32"),
-                      um.astype("float32")], xp.astype("float32"), epochs=epoch, validation_split=0.05)
+                      um.astype("float32")], xp.astype("float32"), epochs=epoch, validation_split=0.05, batch_size=100)
 
         self.vae.compile(optimizer="Adam", loss=self.vae_loss)
 
-        epoch2 = 60
+        epoch2 = 100
         
-        self.vae.fit([xp, xm, up, um], xp, epochs=epoch2, validation_split=0.05)
+        self.vae.fit([xp, xm, up, um], xp, epochs=epoch2, validation_split=0.05, batch_size=100)
 
-        save_model(self.generator, './dynamics/generator_try.hdf5')
+        save_model(self.generator, './dynamics/generator_try_more.hdf5')
 
         generated_xp = self.generator.predict([test_xm, test_up, test_um, test_z])
 

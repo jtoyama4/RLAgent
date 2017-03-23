@@ -14,7 +14,7 @@ import gym
 from dynamics.Temporal_Dynamics import Dynamics_Model
 
 def get_action(prev_action, bounds, action_dim):
-    action = prev_action + np.random.normal(size=(action_dim,)) * 0.03
+    action = prev_action + np.random.normal(size=(action_dim,)) * 0.1
     action = np.clip(action, bounds[0], bounds[1])
     return action
 
@@ -23,7 +23,7 @@ def play(gym_mode, target=None):
     GAMMA = 0.97
     TAU = 0.001
     LEARNING_RATE = 0.001
-    NUM_EPISODES = 1000
+    NUM_EPISODES = 3000
     INITIAL_REPLAY_SIZE = 100
     BATCH_SIZE = 100
     Z_DIM=8
@@ -32,7 +32,7 @@ def play(gym_mode, target=None):
     ITERATION = 1
     BATCH_BOOL = True
     MOTORS = [7, 8, 9, 10]
-    EPOCH = 40
+    EPOCH = 15
 
     np.random.seed(1234)
 
@@ -66,14 +66,16 @@ def play(gym_mode, target=None):
         state = env.reset()
         t = 0
         total_reward = 0
-        prev_action = 0.0
+        prev_action = [0.0 for _ in xrange(ACTION_DIM)]
         tmp_a = []
         tmp_s = []
         while not terminal:
             #env.render()
-            action = get_action(prev_action, ACTION_BOUND, ACTION_DIM)
+            if t < 10:
+                action = prev_action
+            else:
+                action = get_action(prev_action, ACTION_BOUND, ACTION_DIM)
             next_state, reward, terminal, _ = env.step(action)
-
             tmp_s.append(state)
             tmp_a.append(action)
 
