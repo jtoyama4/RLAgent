@@ -132,3 +132,7 @@ class Generator(object):
         atrous_out = self.last(atrous_out)
 
         return atrous_out
+
+    def restore(self, model_path):
+        saver = tf.train.Saver()
+        saver.restore(self.sess, model_path)

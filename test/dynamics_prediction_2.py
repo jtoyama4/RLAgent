@@ -10,9 +10,11 @@ from keras.layers import Input, Lambda
 from keras.layers import Convolution1D as Conv1d
 from keras.layers.core import Flatten, Dense, Reshape
 from keras import backend as K
-from dynamics.generator import Generator
-import math
+import sys
 import os
+sys.path.append("./dynamics")
+from generator import Generator
+import math
 
 cur_dir = os.getcwd()
 
@@ -95,8 +97,8 @@ def calculate_likelihood(t):
 def predict_trajectory(actions, states):
     instance = Generator(ACTION_DIM, STATE_DIM, z_dim, H)
     dynamics = instance.generator
-    saver = tf.train.Saver()
-    saver.restore(instance.sess, "/tmp/vae_dynamics.model")
+    
+    instance.restore("/tmp/vae_dynamics.model")
 
     log_like = 0.0
     count = 0
@@ -125,6 +127,8 @@ def predict_trajectory(actions, states):
             print "sigma", sigma[3]
             print "mean", mean[3]
             print "true", true[3]
+
+            sys.exit()
             
             tmp = calculate_likelihood([mean, sigma, true])
 
