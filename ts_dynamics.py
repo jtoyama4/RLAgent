@@ -11,10 +11,10 @@ from keras.layers import AtrousConv1D as Atrous1d
 from keras import backend as K
 import argparse
 import gym
-from dynamics.Temporal_Dynamics import Dynamics_Model
+from dynamics.Temporal_Dynamics_2 import Dynamics_Model
 
 def get_action(prev_action, bounds, action_dim):
-    action = prev_action + np.random.normal(size=(action_dim,)) * 0.03
+    action = prev_action + np.random.normal(size=(action_dim,)) * 0.1
     action = np.clip(action, bounds[0], bounds[1])
     return action
 
@@ -23,7 +23,7 @@ def play(gym_mode, target=None):
     GAMMA = 0.97
     TAU = 0.001
     LEARNING_RATE = 0.001
-    NUM_EPISODES = 1000
+    NUM_EPISODES = 100
     INITIAL_REPLAY_SIZE = 100
     BATCH_SIZE = 100
     Z_DIM=8
@@ -32,13 +32,14 @@ def play(gym_mode, target=None):
     ITERATION = 1
     BATCH_BOOL = True
     MOTORS = [7, 8, 9, 10]
-    EPOCH = 40
+    EPOCH1 = 30
+    EPOCH2 = 30
 
     np.random.seed(1234)
 
     if gym_mode:
         env = gym.make("ReacherBasic-v1")
-        # env = gym.make("Pendulum-v0")
+        #env = gym.make("Pendulum-v0")
         try:
             ACTION_DIM = env.action_space.shape[0]
         except AttributeError:
@@ -59,19 +60,22 @@ def play(gym_mode, target=None):
     actions = []
     states = []
 
-    dynamics = Dynamics_Model(ACTION_DIM, STATE_DIM, Z_DIM, H_SIZE, BATCH_SIZE)
+    dynamics = Dynamics_Model(ACTION_DIM, STATE_DIM, Z_DIM, H_SIZE, BATCH_SIZE, EPOCH1, EPOCH2)
 
     for n_ep in xrange(NUM_EPISODES):
         terminal = False
         state = env.reset()
         t = 0
         total_reward = 0
-        prev_action = 0.0
+        prev_action = [0.0, 0.0]
         tmp_a = []
         tmp_s = []
         while not terminal:
             #env.render()
-            action = get_action(prev_action, ACTION_BOUND, ACTION_DIM)
+            if t < 10:
+                action = prev_action
+            else:
+                action = get_action(prev_action, ACTION_BOUND, ACTION_DIM)
             next_state, reward, terminal, _ = env.step(action)
 
             tmp_s.append(state)
@@ -91,7 +95,7 @@ def play(gym_mode, target=None):
         actions.append(tmp_a)
         states.append(tmp_s)
 
-    dynamics.learn(actions, states, EPOCH)
+    dynamics.learn(actions, states)
 
 
 
