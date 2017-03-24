@@ -94,14 +94,24 @@ def calculate_likelihood(t):
     return log_like
 
 
-def predict_trajectory(actions, states):
-    instance = Generator(ACTION_DIM, STATE_DIM, z_dim, H)
-    dynamics = instance.generator
+def test(instance):
+    um = np.load("/tmp/test_um.npy")
+    up = np.load("/tmp/test_up.npy")
+    xm = np.load("/tmp/test_xm.npy")
+    xp = np.load("/tmp/test_xp.npy")
+    z = np.random.normal(size=(1, 8)).astype("float32")
+    pred_state = instance.predict(xm, up, um, z)
+    print pred_state
+    print xp
+    sys.exit()
     
-    instance.restore("/tmp/vae_dynamics.model")
+def predict_trajectory(actions, states):
+    instance = Generator(ACTION_DIM, STATE_DIM, z_dim, H, "/tmp/vae_dynamics.model")
 
     log_like = 0.0
     count = 0
+
+    test(instance)
 
     for state, action in zip(states, actions):
         for i in range(len(action)-2*H):
@@ -117,18 +127,19 @@ def predict_trajectory(actions, states):
             samples = []
             for _ in xrange(2):
                 z = np.random.normal(loc=0.0, scale=1.0, size=(1, z_dim))
-                pred_state = dynamics([0, x_m, u_p, u_m, z])[0][0]
+                pred_state = instance.predict(x_m, u_p, u_m, z)
                 samples.append(pred_state)
             #print "sample", samples[:3]
             mean = np.mean(samples, axis=0)
             sigma = np.var(samples, axis=0)
             true = state[i + H:i + 2 * H]
 
-            print "sigma", sigma[3]
-            print "mean", mean[3]
-            print "true", true[3]
+            #print "sigma", sigma[3]
+            #print "mean", mean[3]
+            #print "true", true[3]
+            print np.mean(mean)
 
-            sys.exit()
+            
             
             tmp = calculate_likelihood([mean, sigma, true])
 
@@ -138,6 +149,7 @@ def predict_trajectory(actions, states):
 
             count += 1
 
+        sys.exit()
     return log_like / count
 
 if __name__ == '__main__':
