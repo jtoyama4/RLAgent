@@ -11,13 +11,13 @@ import math
 import os
 
 class Generator(object):
-    def __init__(self,action_dim, state_dim, z_dim, h_size):
+    def __init__(self,action_dim, state_dim, z_dim, h_size, model_path=None):
         self.action_dim = action_dim
         self.state_dim = state_dim
         self.z_dim = z_dim
         self.H = h_size
         self.layer_init()
-        self.generator = self.build_generator()
+        self.predictor = self.build_generator()
 
         config = tf.ConfigProto(
                 gpu_options=tf.GPUOptions(
@@ -25,7 +25,9 @@ class Generator(object):
                         )
             )
         self.sess = tf.InteractiveSession(config=config)
-        tf.global_variables_initializer().run()
+        if model_path:
+            self.restore(model_path)
+        #tf.global_variables_initializer().run()
 
     def layer_const(self, layer):
         name = layer.name
@@ -175,5 +177,9 @@ class Generator(object):
         return atrous_out
 
     def restore(self, model_path):
-        saver = tf.train.Saver()
-        saver.restore(self.sess, model_path)
+        self.saver = tf.train.Saver()
+        self.saver.restore(self.sess, model_path)
+
+    def predict(self, x_m, u_p, u_m, z):
+        return self.predictor([0, x_m, u_p, u_m, z])[0][0]
+        
