@@ -13,6 +13,7 @@ from keras import backend as K
 from dynamics.generator import Generator
 import math
 import os
+from dynamics.Temporal_Dynamics_2 import Dynamics_Model
 
 cur_dir = os.getcwd()
 
@@ -64,16 +65,6 @@ def sampling_trajectory(NUM_EPISODES):
     return actions, states
 
 
-def slicing(t, ix):
-    c_u, c_x = t
-    begin_index = tf.constant([0, ix, 0])
-    size_index = tf.constant([-1, H, -1])
-    u = tf.slice(c_u, begin_index, size_index)
-    x = tf.slice(c_x, begin_index, size_index)
-    k = tf.concat([u, x], axis=-1)
-    return k
-
-
 def calculate_likelihood(t):
     mus, sigmas, xs = t
     #print mus
@@ -93,10 +84,9 @@ def calculate_likelihood(t):
 
 
 def predict_trajectory(actions, states):
-    instance = Generator(ACTION_DIM, STATE_DIM, z_dim, H)
-    dynamics = instance.generator
+    dynamics = Dynamics_Model(ACTION_DIM, STATE_DIM, z_dim, H, 1, 1, 1)
     saver = tf.train.Saver()
-    saver.restore(instance.sess, "/tmp/vae_dynamics.model")
+    saver.restore(dynamics.sess, "/tmp/vae_dynamics.model")
 
     log_like = 0.0
     count = 0
@@ -115,7 +105,7 @@ def predict_trajectory(actions, states):
             samples = []
             for _ in xrange(2):
                 z = np.random.normal(loc=0.0, scale=1.0, size=(1, z_dim))
-                pred_state = dynamics([0, x_m, u_p, u_m, z])[0][0]
+                pred_state = dynamics.generator([0, x_m, u_p, u_m, z])[0][0]
                 samples.append(pred_state)
             #print "sample", samples[:3]
             mean = np.mean(samples, axis=0)

@@ -22,7 +22,7 @@ from keras.utils.vis_utils import plot_model as plot
 
 
 class Dynamics_Model(object):
-    def __init__(self,action_dim, state_dim, z_dim, h_size, batch_size, epoch1, epoch2):
+    def __init__(self, action_dim, state_dim, z_dim, h_size, batch_size, epoch1, epoch2):
         self.action_dim = action_dim
         self.state_dim = state_dim
         self.z_dim = z_dim
@@ -40,6 +40,7 @@ class Dynamics_Model(object):
             )
         self.sess = tf.InteractiveSession(config=config)
         tf.global_variables_initializer().run()
+        self.variables_const()
         """
         self.vae.summary()
         self.generator.summary()
@@ -48,13 +49,23 @@ class Dynamics_Model(object):
         """
 
     def layer_const(self, layer):
-        name = layer.name
-        weight = layer.get_weights()
-        self.variables[name] = layer
+        self.layers.append(layer)
+        return layer
+
+    def variables_const(self):
+        self.variables = {}
+        for layer in self.layers:
+            name = layer.name
+            weights = layer.trainable_weights
+            print weights
+            for n, weight in enumerate(weights):
+                weight_name = "%s_%d" % (name, n)
+                self.variables[weight_name] = weight
+                print weight_name, type(weight)
         return layer
 
     def layer_init(self):
-        self.variables = {}
+        self.layers = []
         self.x_layer_1 = self.layer_const(Conv1d(32, 2, dilation_rate=1, name="Atrous_tanh_1"))
         self.y_layer_1 = self.layer_const(Conv1d(32, 2, dilation_rate=1, name="Atrous_sigmoid_1"))
 
@@ -307,8 +318,8 @@ class Dynamics_Model(object):
 
         print loss
 
-        saver = tf.train.Saver()
-        #saver.save(self.sess, "/tmp/vae_dynamics.model")
+        saver = tf.train.Saver(self.variables)
+        saver.save(self.sess, "/tmp/vae_dynamics_test.model")
 
         generated_xp = self.generator([0, test_xm, test_up, test_um, test_z])
         error = np.sum((test_xp - generated_xp) ** 2)
@@ -328,7 +339,7 @@ class Dynamics_Model(object):
         with tf.Session() as sess1:
             init = tf.initialize_all_variables()
             sess1.run(init)
-            saver.restore(sess1, "/tmp/vae_dynamics.model")
+            saver.restore(sess1, "/tmp/vae_dynamics_test.model")
             generated_xp = self.generator([0, test_xm, test_up, test_um, test_z])
             error = np.sum((test_xp - generated_xp) ** 2)
             print error

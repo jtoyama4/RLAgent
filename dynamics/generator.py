@@ -25,17 +25,28 @@ class Generator(object):
                             allow_growth=True
                         )
             )
-        #self.sess = tf.InteractiveSession(config=config)
-        #tf.global_variables_initializer().run()
+        self.sess = tf.InteractiveSession(config=config)
+        tf.global_variables_initializer().run()
+        self.variable_const()
 
     def layer_const(self, layer):
-        name = layer.name
-        weight = layer.get_weights()
-        self.variables[name] = layer
+        self.layers.append(layer)
+        return layer
+
+    def variables_const(self):
+        self.variables = {}
+        for layer in self.layers:
+            name = layer.name
+            weights = layer.trainable_weights
+            print weights
+            for n, weight in enumerate(weights):
+                weight_name = "%s_%d" % (name, n)
+                self.variables[weight_name] = weight
+                print weight_name, type(weight)
         return layer
 
     def layer_init(self):
-        self.variables = {}
+        self.layers = []
         self.x_layer_1 = self.layer_const(Conv1d(32, 2, dilation_rate=1, name="Atrous_tanh_1"))
         self.y_layer_1 = self.layer_const(Conv1d(32, 2, dilation_rate=1, name="Atrous_sigmoid_1"))
 
@@ -182,3 +193,4 @@ class Generator(object):
         atrous_out = self.last(atrous_out)
 
         return atrous_out
+

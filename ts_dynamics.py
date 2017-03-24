@@ -23,7 +23,7 @@ def play(gym_mode, target=None):
     GAMMA = 0.97
     TAU = 0.001
     LEARNING_RATE = 0.001
-    NUM_EPISODES = 1
+    NUM_EPISODES = 100
     INITIAL_REPLAY_SIZE = 100
     BATCH_SIZE = 100
     Z_DIM=8
@@ -32,8 +32,8 @@ def play(gym_mode, target=None):
     ITERATION = 1
     BATCH_BOOL = True
     MOTORS = [7, 8, 9, 10]
-    EPOCH1 = 1
-    EPOCH2 = 1
+    EPOCH1 = 10
+    EPOCH2 = 10
 
     np.random.seed(1234)
 
