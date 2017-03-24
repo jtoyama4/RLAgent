@@ -318,7 +318,7 @@ class Dynamics_Model(object):
         print loss
 
         saver = tf.train.Saver(self.variables)
-        saver.save(self.sess, "/tmp/vae_dynamics_test.model")
+        #saver.save(self.sess, "/tmp/vae_dynamics_test.model")
 
         generated_xp = self.generator([0, test_xm, test_up, test_um, test_z])
         error = np.sum((test_xp - generated_xp) ** 2)

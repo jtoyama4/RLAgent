@@ -12,6 +12,7 @@ from keras import backend as K
 import argparse
 import gym
 from dynamics.Temporal_Dynamics_2 import Dynamics_Model
+from utils.smooth_torque import smooth_action
 
 def get_action(prev_action, bounds, action_dim):
     action = prev_action + np.random.normal(size=(action_dim,)) * 0.1
@@ -23,7 +24,7 @@ def play(gym_mode, target=None):
     GAMMA = 0.97
     TAU = 0.001
     LEARNING_RATE = 0.001
-    NUM_EPISODES = 1000
+    NUM_EPISODES = 100
     INITIAL_REPLAY_SIZE = 100
     BATCH_SIZE = 100
     Z_DIM=8
@@ -72,13 +73,13 @@ def play(gym_mode, target=None):
 
         tmp_a = []
         tmp_s = []
+        smooth_actions = smooth_action(100, 0.3, 10)
+        print smooth_actions
         while not terminal:
-            #env.render()
-            if t < 10:
-                action = prev_action
-            else:
-                action = get_action(prev_action, ACTION_BOUND, ACTION_DIM)
+            env.render()
+            action = smooth_actions[t]
             next_state, reward, terminal, _ = env.step(action)
+
             tmp_s.append(state)
             tmp_a.append(action)
 
