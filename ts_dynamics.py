@@ -23,7 +23,7 @@ def play(gym_mode, target=None):
     GAMMA = 0.97
     TAU = 0.001
     LEARNING_RATE = 0.001
-    NUM_EPISODES = 1000
+    NUM_EPISODES = 2000
     INITIAL_REPLAY_SIZE = 100
     BATCH_SIZE = 100
     Z_DIM=8
@@ -34,6 +34,8 @@ def play(gym_mode, target=None):
     MOTORS = [7, 8, 9, 10]
     EPOCH1 = 30
     EPOCH2 = 100
+
+
     np.random.seed(1234)
 
     if gym_mode:

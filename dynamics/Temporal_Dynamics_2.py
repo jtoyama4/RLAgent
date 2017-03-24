@@ -22,7 +22,7 @@ from keras.utils.vis_utils import plot_model as plot
 
 
 class Dynamics_Model(object):
-    def __init__(self,action_dim, state_dim, z_dim, h_size, batch_size, epoch1, epoch2):
+    def __init__(self, action_dim, state_dim, z_dim, h_size, batch_size, epoch1, epoch2):
         self.action_dim = action_dim
         self.state_dim = state_dim
         self.z_dim = z_dim
@@ -40,6 +40,7 @@ class Dynamics_Model(object):
             )
         self.sess = tf.InteractiveSession(config=config)
         tf.global_variables_initializer().run()
+        self.variables_const()
         """
         self.vae.summary()
         self.generator.summary()
@@ -48,20 +49,29 @@ class Dynamics_Model(object):
         """
 
     def layer_const(self, layer):
-        name = layer.name
-        weight = layer.get_weights()
-        self.variables[name] = layer
+        self.layers.append(layer)
         return layer
 
-    def layer_init(self):
+    def variables_const(self):
         self.variables = {}
+        for layer in self.layers:
+            name = layer.name
+            weights = layer.trainable_weights
+            print weights
+            for n, weight in enumerate(weights):
+                weight_name = "%s_%d" % (name, n)
+                self.variables[weight_name] = weight
+                print weight_name, type(weight)
+
+    def layer_init(self):
+        self.layers = []
         self.x_layer_1 = self.layer_const(Conv1d(32, 2, dilation_rate=1, name="Atrous_tanh_1"))
         self.y_layer_1 = self.layer_const(Conv1d(32, 2, dilation_rate=1, name="Atrous_sigmoid_1"))
 
         self.z_dense_tan_1 = self.layer_const(Dense(32, name="z_dense_tan_1"))
         self.z_dense_sig_1 = self.layer_const(Dense(32, name="z_dense_sig_1"))
 
-        self.lambda1 = self.layer_const(Lambda(self.gated_activation, name='gate_1'))
+        self.lambda1 = Lambda(self.gated_activation, name='gate_1')
 
         self.x_layer_2 = self.layer_const(Conv1d(32, 3, dilation_rate=2, name="Atrous_tanh_2"))
         self.y_layer_2 = self.layer_const(Conv1d(32, 3, dilation_rate=2, name="Atrous_sigmoid_2"))
@@ -69,7 +79,7 @@ class Dynamics_Model(object):
         self.z_dense_tan_2 = self.layer_const(Dense(32, name="z_dense_tan_2"))
         self.z_dense_sig_2 = self.layer_const(Dense(32, name="z_dense_sig_2"))
 
-        self.lambda2 = self.layer_const(Lambda(self.gated_activation, name='gate_2'))
+        self.lambda2 = Lambda(self.gated_activation, name='gate_2')
 
         self.x_layer_3 = self.layer_const(Conv1d(32, 2, dilation_rate=4, name="Atrous_tanh_3"))
         self.y_layer_3 = self.layer_const(Conv1d(32, 2, dilation_rate=4, name="Atrous_sigmoid_3"))
@@ -77,12 +87,9 @@ class Dynamics_Model(object):
         self.z_dense_tan_3 = self.layer_const(Dense(32, name="z_dense_tan_3"))
         self.z_dense_sig_3 = self.layer_const(Dense(32, name="z_dense_sig_3"))
 
-        self.lambda3 = self.layer_const(Lambda(self.gated_activation, name='gate_3'))
+        self.lambda3 = Lambda(self.gated_activation, name='gate_3')
 
         self.last = self.layer_const(Conv1d(self.state_dim, 1, name='last_layer'))
-
-
-
 
     def build_network(self):
         x_plus_ph = Input(shape=[self.H, self.state_dim], name="x_plus")
@@ -208,17 +215,16 @@ class Dynamics_Model(object):
     def learn(self, actions, states):
         n_traj = len(actions)
         print n_traj
-
-        action_zeros = np.zeros((self.H-1, self.action_dim))
-        state_zeros = np.zeros((self.H-1, self.state_dim))
         train_xp = []
         train_xm = []
         train_up = []
         train_um = []
 
         for n in xrange(n_traj):
-            action = np.concatenate([action_zeros, np.array(actions[n])], axis=0)
-            state = np.concatenate([state_zeros, np.array(states[n])], axis=0)
+            #action = np.concatenate([action_zeros, np.array(actions[n])], axis=0)
+            #state = np.concatenate([state_zeros, np.array(states[n])], axis=0)
+            action = np.array(actions[n])
+            state = np.array(states[n])
             for i in xrange(len(action) - 2*self.H):
                 x_p = state[i + self.H: i + 2 * self.H]
                 x_m = state[i: i+self.H]
@@ -255,10 +261,15 @@ class Dynamics_Model(object):
         #save_model(self.vae, 'vae.hdf5')
         #save_model(self.generator, './dynamics/generator.hdf5')
 
-        test_xp = np.expand_dims(xp[10], 0)
-        test_xm = np.expand_dims(xm[10], 0)
-        test_up = np.expand_dims(up[10], 0)
-        test_um = np.expand_dims(um[10], 0)
+        test_xp = np.expand_dims(xp[30], 0)
+        test_xm = np.expand_dims(xm[30], 0)
+        test_up = np.expand_dims(up[30], 0)
+        test_um = np.expand_dims(um[30], 0)
+
+        np.save("/tmp/test_xp.npy", test_xp)
+        np.save("/tmp/test_xm.npy", test_xm)
+        np.save("/tmp/test_up.npy", test_up)
+        np.save("/tmp/test_um.npy", test_um)
 
         test_z = np.random.normal(loc=0.0, scale=1.0, size=(1, self.z_dim)).astype("float32")
 
@@ -305,8 +316,8 @@ class Dynamics_Model(object):
 
         print loss
 
-        saver = tf.train.Saver()
-        saver.save(self.sess, "/tmp/vae_dynamics.model")
+        saver = tf.train.Saver(self.variables)
+        saver.save(self.sess, "/tmp/vae_dynamics_small_init.model")
 
         generated_xp = self.generator([0, test_xm, test_up, test_um, test_z])
         error = np.sum((test_xp - generated_xp) ** 2)
@@ -319,10 +330,19 @@ class Dynamics_Model(object):
         with tf.Session() as sess1:
             init = tf.initialize_all_variables()
             sess1.run(init)
-            saver.restore(sess1, "/tmp/vae_dynamics.model")
             generated_xp = self.generator([0, test_xm, test_up, test_um, test_z])
             error = np.sum((test_xp - generated_xp) ** 2)
             print error
+
+        with tf.Session() as sess1:
+            init = tf.initialize_all_variables()
+            sess1.run(init)
+            saver.restore(sess1, "/tmp/vae_dynamics_small_init.model")
+            generated_xp = self.generator([0, test_xm, test_up, test_um, test_z])
+            error = np.sum((test_xp - generated_xp) ** 2)
+            print error
+            print generated_xp
+            print test_xp
 
         """
         merged_summary_op = tf.summary.merge_all()

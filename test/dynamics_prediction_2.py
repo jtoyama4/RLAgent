@@ -16,6 +16,7 @@ sys.path.append("./dynamics")
 from generator import Generator
 import math
 
+
 cur_dir = os.getcwd()
 
 env = gym.make("ReacherBasic-v1")
@@ -30,7 +31,7 @@ z_dim = 8
 
 
 def get_action(prev_action, bounds, action_dim):
-    action = prev_action + np.random.normal(size=(action_dim,))/3.0
+    action = prev_action + np.random.normal(size=(action_dim,)) * 0.1
     action = np.clip(action, bounds[0], bounds[1])
     return action
 
@@ -66,16 +67,6 @@ def sampling_trajectory(NUM_EPISODES):
     return actions, states
 
 
-def slicing(t, ix):
-    c_u, c_x = t
-    begin_index = tf.constant([0, ix, 0])
-    size_index = tf.constant([-1, H, -1])
-    u = tf.slice(c_u, begin_index, size_index)
-    x = tf.slice(c_x, begin_index, size_index)
-    k = tf.concat([u, x], axis=-1)
-    return k
-
-
 def calculate_likelihood(t):
     mus, sigmas, xs = t
     #print mus
@@ -85,13 +76,13 @@ def calculate_likelihood(t):
     for mu, sigma, x in zip(mus, sigmas, xs):
         c=0
         for m, s, x_elem in zip(mu, sigma, x):
-            sigma = 0.01
             tmp = -0.5 * math.log(2*math.pi) - 0.5 * math.log(s) - (x_elem-m)**2 / (2.0*s)
             log_like += tmp
             #print "%d:%f" % (c,tmp)
             c += 1
     #like = (1.0 / K.sqrt(2.0 * math.pi * sigma)) * K.exp(-0.5 * (x-mu)**2 / sigma)
     return log_like
+
 
 
 def test(instance):
@@ -105,13 +96,14 @@ def test(instance):
     print xp
     sys.exit()
     
+
 def predict_trajectory(actions, states):
-    instance = Generator(ACTION_DIM, STATE_DIM, z_dim, H, "/tmp/vae_dynamics.model")
+    dynamics = Generator(ACTION_DIM, STATE_DIM, z_dim, H, "/tmp/vae_dynamics_2.model")
 
     log_like = 0.0
     count = 0
 
-    test(instance)
+    #test(dynamics)
 
     for state, action in zip(states, actions):
         for i in range(len(action)-2*H):
@@ -125,31 +117,27 @@ def predict_trajectory(actions, states):
             x_m = np.expand_dims(x_m, 0)
 
             samples = []
-            for _ in xrange(2):
+            for _ in xrange(20):
                 z = np.random.normal(loc=0.0, scale=1.0, size=(1, z_dim))
-                pred_state = instance.predict(x_m, u_p, u_m, z)
+                pred_state = dynamics.predict(x_m, u_p, u_m, z)[0]
                 samples.append(pred_state)
             #print "sample", samples[:3]
             mean = np.mean(samples, axis=0)
             sigma = np.var(samples, axis=0)
             true = state[i + H:i + 2 * H]
 
-            #print "sigma", sigma[3]
-            #print "mean", mean[3]
-            #print "true", true[3]
-            print np.mean(mean)
-
+            print "sigma", sigma[0]
+            print "mean", mean[0]
+            print "true", true[0]
             
-            
-            tmp = calculate_likelihood([mean, sigma, true])
+            tmp = calculate_likelihood([mean[:2], sigma[:2], true[:2]])
 
             print tmp
 
             log_like += tmp
 
             count += 1
-
-        sys.exit()
+            
     return log_like / count
 
 if __name__ == '__main__':
