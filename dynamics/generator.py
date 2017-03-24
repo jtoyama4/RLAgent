@@ -12,13 +12,13 @@ import math
 import os
 
 class Generator(object):
-    def __init__(self,action_dim, state_dim, z_dim, h_size):
+    def __init__(self, action_dim, state_dim, z_dim, h_size, model_path=None):
         self.action_dim = action_dim
         self.state_dim = state_dim
         self.z_dim = z_dim
         self.H = h_size
         self.layer_init()
-        self.generator = self.build_generator()
+        self.x_m, self.u_p, self.u_m, self.z, self.g_out = self.build_generator()
 
         config = tf.ConfigProto(
                 gpu_options=tf.GPUOptions(
@@ -26,8 +26,13 @@ class Generator(object):
                         )
             )
         self.sess = tf.InteractiveSession(config=config)
+
         tf.global_variables_initializer().run()
-        self.variable_const()
+        print self.x_layer_1.get_weights()
+        self.variables_const()
+        if model_path:
+            self.restore(model_path)
+            print "load learned model"
 
     def layer_const(self, layer):
         self.layers.append(layer)
@@ -38,12 +43,10 @@ class Generator(object):
         for layer in self.layers:
             name = layer.name
             weights = layer.trainable_weights
-            print weights
             for n, weight in enumerate(weights):
                 weight_name = "%s_%d" % (name, n)
                 self.variables[weight_name] = weight
                 print weight_name, type(weight)
-        return layer
 
     def layer_init(self):
         self.layers = []
@@ -161,9 +164,7 @@ class Generator(object):
 
         g_out = concatenate(g_out, axis=1)
 
-        generator = K.function([K.learning_phase(), x_m, u_plus, u_m, sampled_z], [g_out])
-
-        return generator
+        return x_m, u_plus, u_m, sampled_z, g_out
 
     def dilated_causal_conv(self, in_px, z):
         xx1 = self.x_layer_1(in_px)
@@ -194,3 +195,14 @@ class Generator(object):
 
         return atrous_out
 
+    def restore(self, model_path):
+        #self.saver = tf.train.Saver(self.variables)
+        self.saver = tf.train.Saver()
+        self.saver.restore(self.sess, model_path)
+
+    def predict(self, x_m, u_p, u_m, z):
+        return self.g_out.eval(feed_dict={self.x_m: x_m,
+                                          self.u_p: u_p,
+                                          self.u_m: u_m,
+                                          self.z: z})
+        

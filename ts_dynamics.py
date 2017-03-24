@@ -23,7 +23,7 @@ def play(gym_mode, target=None):
     GAMMA = 0.97
     TAU = 0.001
     LEARNING_RATE = 0.001
-    NUM_EPISODES = 100
+    NUM_EPISODES = 1000
     INITIAL_REPLAY_SIZE = 100
     BATCH_SIZE = 100
     Z_DIM=8
@@ -34,6 +34,7 @@ def play(gym_mode, target=None):
     MOTORS = [7, 8, 9, 10]
     EPOCH1 = 10
     EPOCH2 = 10
+
 
     np.random.seed(1234)
 
@@ -67,7 +68,8 @@ def play(gym_mode, target=None):
         state = env.reset()
         t = 0
         total_reward = 0
-        prev_action = [0.0, 0.0]
+        prev_action = [0.0 for _ in xrange(ACTION_DIM)]
+
         tmp_a = []
         tmp_s = []
         while not terminal:
@@ -77,7 +79,6 @@ def play(gym_mode, target=None):
             else:
                 action = get_action(prev_action, ACTION_BOUND, ACTION_DIM)
             next_state, reward, terminal, _ = env.step(action)
-
             tmp_s.append(state)
             tmp_a.append(action)
 

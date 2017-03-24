@@ -62,7 +62,6 @@ class Dynamics_Model(object):
                 weight_name = "%s_%d" % (name, n)
                 self.variables[weight_name] = weight
                 print weight_name, type(weight)
-        return layer
 
     def layer_init(self):
         self.layers = []
@@ -72,7 +71,7 @@ class Dynamics_Model(object):
         self.z_dense_tan_1 = self.layer_const(Dense(32, name="z_dense_tan_1"))
         self.z_dense_sig_1 = self.layer_const(Dense(32, name="z_dense_sig_1"))
 
-        self.lambda1 = self.layer_const(Lambda(self.gated_activation, name='gate_1'))
+        self.lambda1 = Lambda(self.gated_activation, name='gate_1')
 
         self.x_layer_2 = self.layer_const(Conv1d(32, 3, dilation_rate=2, name="Atrous_tanh_2"))
         self.y_layer_2 = self.layer_const(Conv1d(32, 3, dilation_rate=2, name="Atrous_sigmoid_2"))
@@ -80,7 +79,7 @@ class Dynamics_Model(object):
         self.z_dense_tan_2 = self.layer_const(Dense(32, name="z_dense_tan_2"))
         self.z_dense_sig_2 = self.layer_const(Dense(32, name="z_dense_sig_2"))
 
-        self.lambda2 = self.layer_const(Lambda(self.gated_activation, name='gate_2'))
+        self.lambda2 = Lambda(self.gated_activation, name='gate_2')
 
         self.x_layer_3 = self.layer_const(Conv1d(32, 2, dilation_rate=4, name="Atrous_tanh_3"))
         self.y_layer_3 = self.layer_const(Conv1d(32, 2, dilation_rate=4, name="Atrous_sigmoid_3"))
@@ -88,7 +87,7 @@ class Dynamics_Model(object):
         self.z_dense_tan_3 = self.layer_const(Dense(32, name="z_dense_tan_3"))
         self.z_dense_sig_3 = self.layer_const(Dense(32, name="z_dense_sig_3"))
 
-        self.lambda3 = self.layer_const(Lambda(self.gated_activation, name='gate_3'))
+        self.lambda3 = Lambda(self.gated_activation, name='gate_3')
 
         self.last = self.layer_const(Conv1d(self.state_dim, 1, name='last_layer'))
 
