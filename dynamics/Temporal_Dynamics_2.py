@@ -49,9 +49,7 @@ class Dynamics_Model(object):
 
     def layer_const(self, layer):
         name = layer.name
-        print layer.get_config()
         weight = layer.get_weights()
-        print type(weight)
         self.variables[name] = layer
         return layer
 
@@ -82,9 +80,6 @@ class Dynamics_Model(object):
         self.lambda3 = self.layer_const(Lambda(self.gated_activation, name='gate_3'))
 
         self.last = self.layer_const(Conv1d(self.state_dim, 1, name='last_layer'))
-
-
-
 
     def build_network(self):
         x_plus_ph = Input(shape=[self.H, self.state_dim], name="x_plus")
@@ -257,10 +252,15 @@ class Dynamics_Model(object):
         #save_model(self.vae, 'vae.hdf5')
         #save_model(self.generator, './dynamics/generator.hdf5')
 
-        test_xp = np.expand_dims(xp[10], 0)
-        test_xm = np.expand_dims(xm[10], 0)
-        test_up = np.expand_dims(up[10], 0)
-        test_um = np.expand_dims(um[10], 0)
+        test_xp = np.expand_dims(xp[30], 0)
+        test_xm = np.expand_dims(xm[30], 0)
+        test_up = np.expand_dims(up[30], 0)
+        test_um = np.expand_dims(um[30], 0)
+
+        np.save("/tmp/test_xp.npy", test_xp)
+        np.save("/tmp/test_xm.npy", test_xm)
+        np.save("/tmp/test_up.npy", test_up)
+        np.save("/tmp/test_um.npy", test_um)
 
         test_z = np.random.normal(loc=0.0, scale=1.0, size=(1, self.z_dim)).astype("float32")
 
@@ -308,7 +308,7 @@ class Dynamics_Model(object):
         print loss
 
         saver = tf.train.Saver()
-        saver.save(self.sess, "/tmp/vae_dynamics.model")
+        #saver.save(self.sess, "/tmp/vae_dynamics.model")
 
         generated_xp = self.generator([0, test_xm, test_up, test_um, test_z])
         error = np.sum((test_xp - generated_xp) ** 2)
@@ -321,10 +321,19 @@ class Dynamics_Model(object):
         with tf.Session() as sess1:
             init = tf.initialize_all_variables()
             sess1.run(init)
+            generated_xp = self.generator([0, test_xm, test_up, test_um, test_z])
+            error = np.sum((test_xp - generated_xp) ** 2)
+            print error
+
+        with tf.Session() as sess1:
+            init = tf.initialize_all_variables()
+            sess1.run(init)
             saver.restore(sess1, "/tmp/vae_dynamics.model")
             generated_xp = self.generator([0, test_xm, test_up, test_um, test_z])
             error = np.sum((test_xp - generated_xp) ** 2)
             print error
+            print generated_xp
+            print test_xp
 
         """
         merged_summary_op = tf.summary.merge_all()

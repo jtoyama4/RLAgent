@@ -7,6 +7,7 @@ from keras.layers import Input, Lambda
 from keras.layers import Convolution1D as Conv1d
 from keras.layers.core import Dense, Flatten
 from keras import backend as K
+from keras.losses import mean_squared_error as mse
 import math
 import os
 
@@ -24,8 +25,8 @@ class Generator(object):
                             allow_growth=True
                         )
             )
-        self.sess = tf.InteractiveSession(config=config)
-        tf.global_variables_initializer().run()
+        #self.sess = tf.InteractiveSession(config=config)
+        #tf.global_variables_initializer().run()
 
     def layer_const(self, layer):
         name = layer.name
@@ -70,10 +71,10 @@ class Generator(object):
         return x * y
 
     def build_generator(self):
+        x_plus_ph = Input(shape=[self.H, self.state_dim], name="x_plus")
         x_m = Input(shape=[self.H, self.state_dim], name="x_min")
         u_plus = Input(shape=[self.H, self.action_dim], name="u_plus")
         u_m = Input(shape=[self.H, self.action_dim], name="u_min")
-        x_plus_ph = Input(shape=[self.H, self.state_dim], name="x_plus")
         # encoder
 
         h_1 = Conv1d(32, 2, activation='relu')(x_plus_ph)
@@ -88,15 +89,6 @@ class Generator(object):
             eps = K.random_normal(shape=(self.z_dim,), mean=0.0, stddev=1.0)
             return z_mean + eps * z_std
 
-        def vae_loss_f(x_original, x_generated):
-            square_loss = K.mean((x_original - x_generated)**2)
-            kl_loss = K.sum((-0.5*K.log(var)) + ((K.square(mu) + var) / 2.0) - 0.5)
-            return square_loss + kl_loss
-
-        z = Lambda(sampling, output_shape=(self.z_dim,), name="sampling_lambda")([mu, var])
-
-        # decoder
-
         def slicing(t, ix):
             c_u, c_x = t
             begin_index = tf.constant([0, ix, 0])
@@ -105,6 +97,15 @@ class Generator(object):
             x = tf.slice(c_x, begin_index, size_index)
             k = tf.concat([u, x], axis=-1)
             return k
+
+        def vae_loss_f(x_original, x_generated):
+            square_loss = K.mean((x_original - x_generated)**2)
+            kl_loss = K.sum((-0.5*K.log(var)) + ((K.square(mu) + var) / 2.0) - 0.5)
+            return square_loss + kl_loss
+
+        z = Lambda(sampling, output_shape=(self.z_dim,), name="sampling_lambda")([mu, var])
+
+        # decoder
 
         connected_u = concatenate([u_m, u_plus], axis=1)
         connected_x = x_m
@@ -121,6 +122,14 @@ class Generator(object):
             x_plus.append(atrous_out)
 
         x_plus = concatenate(x_plus, axis=1)
+
+        mse_loss = tf.reduce_mean(mse(x_plus_ph, x_plus))
+        vae_loss = tf.reduce_mean(vae_loss_f(x_plus_ph, x_plus))
+
+        tf.summary.scalar("mse_loss", mse_loss)
+
+        vae_mse = tf.train.AdamOptimizer().minimize(mse_loss)
+        vae = tf.train.AdamOptimizer().minimize(vae_loss)
 
         # generator
 
