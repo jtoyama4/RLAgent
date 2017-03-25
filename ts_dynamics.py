@@ -77,7 +77,7 @@ def play(gym_mode, target=None):
         smooth_actions = smooth_action(100, [0.3, 0.2], 10)
         
         while not terminal:
-            env.render()
+            #env.render()
             action = smooth_actions[t]
             next_state, reward, terminal, _ = env.step(action)
 
