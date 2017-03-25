@@ -98,7 +98,7 @@ def test(instance):
     
 
 def predict_trajectory(actions, states):
-    dynamics = Generator(ACTION_DIM, STATE_DIM, z_dim, H, "/tmp/vae_dynamics_2.model")
+    dynamics = Generator(ACTION_DIM, STATE_DIM, z_dim, H, "/tmp/vae_dynamics_small_init.model")
 
     log_like = 0.0
     count = 0
