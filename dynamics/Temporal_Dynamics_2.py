@@ -139,7 +139,7 @@ class Dynamics_Model(object):
                            output_shape=(self.H*2, self.state_dim+self.action_dim))([connected_u, connected_x])
 
             atrous_out = self.dilated_causal_conv(in_px, z)
-            connected_x = concatenate([connected_x, atrous_out], axis=1)
+            connected_x = concatenate([connected_x, tf.stop_gradient(atrous_out)], axis=1)
 
             x_plus.append(atrous_out)
 
@@ -338,7 +338,7 @@ class Dynamics_Model(object):
         with tf.Session() as sess1:
             init = tf.initialize_all_variables()
             sess1.run(init)
-            saver.restore(sess1, "/tmp/vae_dynamics_small_init.model")
+            saver.restore(sess1, "/tmp/vae_dynamics_stop_grad.model")
             generated_xp = self.generator([0, test_xm, test_up, test_um, test_z])
             error = np.sum((test_xp - generated_xp) ** 2)
             print error

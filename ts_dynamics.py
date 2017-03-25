@@ -24,7 +24,7 @@ def play(gym_mode, target=None):
     GAMMA = 0.97
     TAU = 0.001
     LEARNING_RATE = 0.001
-    NUM_EPISODES = 2000
+    NUM_EPISODES = 20
 
     INITIAL_REPLAY_SIZE = 100
     BATCH_SIZE = 100
