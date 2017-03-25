@@ -4,12 +4,13 @@ import numpy as np
 import matplotlib.pyplot as plt
 
 def smooth_action(seq_len, action_bound, first_zero):
+    action_bound = np.array(action_bound)
     f0 = np.random.uniform(0.1, 0.3, size=2)
     f1 = np.random.uniform(0.1, 0.3, size=2)
     f2 = np.random.uniform(0.1, 0.3, size=2)
     f3 = np.random.uniform(0.1, 0.3, size=2)
 
-    C = float(action_bound)
+    C = np.array([1.0, 1.0])
 
     c0 = C / f0
     c1 = C / f1
@@ -23,11 +24,12 @@ def smooth_action(seq_len, action_bound, first_zero):
 
     max_constraint = abs(a0) + abs(a1) + abs(a2) + abs(a3)
 
-    a0 /= max_constraint * 2
-    a1 /= max_constraint * 2
-    a2 /= max_constraint * 2
-    a3 /= max_constraint * 2
+    bounds = C / action_bound
 
+    a0 /= max_constraint * bounds
+    a1 /= max_constraint * bounds
+    a2 /= max_constraint * bounds
+    a3 /= max_constraint * bounds
 
     #o0 = np.random.uniform(0.0, 6.14)
     #o1 = np.random.uniform(0.0, 6.14)
@@ -48,5 +50,5 @@ def smooth_action(seq_len, action_bound, first_zero):
     return action
 
 if __name__ == "__main__":
-    a = smooth_action(100, 1.0, 10)
+    a = smooth_action(100, [0.5, 0.1], 10)
 
