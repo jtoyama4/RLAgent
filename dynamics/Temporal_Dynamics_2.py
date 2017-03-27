@@ -22,7 +22,7 @@ from keras.utils.vis_utils import plot_model as plot
 
 
 class Dynamics_Model(object):
-    def __init__(self, action_dim, state_dim, z_dim, h_size, batch_size, epoch1, epoch2):
+    def __init__(self, action_dim, state_dim, z_dim, h_size, batch_size, epoch1, epoch2, stop_grad=False):
         self.action_dim = action_dim
         self.state_dim = state_dim
         self.z_dim = z_dim
@@ -30,6 +30,7 @@ class Dynamics_Model(object):
         self.epoch1 = epoch1
         self.epoch2 = epoch2
         self.batch_size = batch_size
+        self.stop_grad = stop_grad
         self.layer_init()
         self.x_m, self.x_p, self.u_m, self.u_p, self.mse_loss, self.vae_loss, self.g_mse, self.vae_mse, self.vae, self.generator, self.z = self.build_network()
 
@@ -140,13 +141,12 @@ class Dynamics_Model(object):
 
             atrous_out = self.dilated_causal_conv(in_px, z)
 
-            #connected_x = concatenate([connected_x, tf.stop_gradient(atrous_out)], axis=1)
-            connected_x = concatenate([connected_x, atrous_out], axis=1)
-
             x_plus.append(atrous_out)
-            stopped_atrous = tf.stop_gradient(atrous_out)
-            connected_x = concatenate([connected_x, stopped_atrous], axis=1)
-
+            if self.stop_grad:
+                stopped_atrous = tf.stop_gradient(atrous_out)
+                connected_x = concatenate([connected_x, stopped_atrous], axis=1)
+            else:
+                connected_x = concatenate([connected_x, atrous_out], axis=1)
 
         x_plus = concatenate(x_plus, axis=1)
 

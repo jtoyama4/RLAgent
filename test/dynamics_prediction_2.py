@@ -136,7 +136,7 @@ def predict_trajectory(actions, states):
             
             tmp = calculate_likelihood([mean, sigma, true])
 
-            print tmp
+            print tmp, np.mean(u_m[0], axis=0), np.mean(u_p[0], axis=0)
 
             log_like += tmp
 
@@ -146,7 +146,7 @@ def predict_trajectory(actions, states):
     return log_like / count
 
 if __name__ == '__main__':
-    actions, states = sampling_trajectory(10)
+    actions, states = sampling_trajectory(3)
     log_likelihood = predict_trajectory(actions, states)
     print log_likelihood
 
