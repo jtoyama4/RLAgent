@@ -31,7 +31,7 @@ class Dynamics_Model(object):
         self.epoch2 = epoch2
         self.batch_size = batch_size
         self.layer_init()
-        self.x_m, self.x_p, self.u_m, self.u_p, self.mse_loss, self.vae_loss, self.generator, self.vae_mse, self.vae = self.build_network()
+        self.x_m, self.x_p, self.u_m, self.u_p, self.mse_loss, self.vae_loss, self.g_mse, self.vae_mse, self.vae, self.generator, self.z = self.build_network()
 
         config = tf.ConfigProto(
                 gpu_options=tf.GPUOptions(
@@ -139,6 +139,7 @@ class Dynamics_Model(object):
                            output_shape=(self.H*2, self.state_dim+self.action_dim))([connected_u, connected_x])
 
             atrous_out = self.dilated_causal_conv(in_px, z)
+            #connected_x = concatenate([connected_x, tf.stop_gradient(atrous_out)], axis=1)
             connected_x = concatenate([connected_x, atrous_out], axis=1)
 
             x_plus.append(atrous_out)
@@ -150,8 +151,8 @@ class Dynamics_Model(object):
 
         tf.summary.scalar("mse_loss", mse_loss)
 
-        vae_mse = tf.train.AdamOptimizer().minimize(mse_loss)
-        vae = tf.train.AdamOptimizer().minimize(vae_loss)
+        vae_mse = tf.train.RMSPropOptimizer(0.001).minimize(mse_loss)
+        vae = tf.train.RMSPropOptimizer(0.001).minimize(vae_loss)
 
         # generator
         sampled_z = Input(shape=(self.z_dim,))
@@ -171,9 +172,11 @@ class Dynamics_Model(object):
 
         g_out = concatenate(g_out, axis=1)
 
+        generator_mse = tf.reduce_mean(mse(x_plus_ph, g_out))
+
         generator = K.function([K.learning_phase(), x_m, u_plus, u_m, sampled_z], [g_out])
 
-        return x_m, x_plus_ph, u_m, u_plus, mse_loss, vae_loss, generator, vae_mse, vae
+        return x_m, x_plus_ph, u_m, u_plus, mse_loss, vae_loss, generator_mse, vae_mse, vae, generator, sampled_z
 
     def dilated_causal_conv(self, in_px, z):
         xx1 = self.x_layer_1(in_px)
@@ -261,28 +264,19 @@ class Dynamics_Model(object):
         #save_model(self.vae, 'vae.hdf5')
         #save_model(self.generator, './dynamics/generator.hdf5')
 
-        test_xp = np.expand_dims(xp[30], 0)
-        test_xm = np.expand_dims(xm[30], 0)
-        test_up = np.expand_dims(up[30], 0)
-        test_um = np.expand_dims(um[30], 0)
+        test_xp = np.array(xp[:50])
+        test_xm = np.array(xm[:50])
+        test_up = np.array(up[:50])
+        test_um = np.array(um[:50])
 
         np.save("/tmp/test_xp.npy", test_xp)
         np.save("/tmp/test_xm.npy", test_xm)
         np.save("/tmp/test_up.npy", test_up)
         np.save("/tmp/test_um.npy", test_um)
 
-        test_z = np.random.normal(loc=0.0, scale=1.0, size=(1, self.z_dim)).astype("float32")
+        test_z = np.random.normal(loc=0.0, scale=1.0, size=(50, self.z_dim)).astype("float32")
 
         data_length = len(xm)
-
-        loss = self.mse_loss.eval(feed_dict={self.x_p: xp.astype("float32"),
-                                             self.x_m: xm.astype("float32"),
-                                             self.u_p: up.astype("float32"),
-                                             self.u_m: um.astype("float32")})
-
-        generated_xp = self.generator([0, test_xm, test_up, test_um, test_z])
-        error = np.sum((test_xp - generated_xp) ** 2)
-        print error
 
         for i in range(self.epoch1):
             shuffle_index = np.arange(data_length)
@@ -294,10 +288,12 @@ class Dynamics_Model(object):
                                             self.u_m: um[batch_index].astype("float32"),
                                             self.u_p: up[batch_index].astype("float32")})
 
-            print self.mse_loss.eval(feed_dict={self.x_m: test_xm.astype("float32"),
+            print "epoch: ", i, "valid loss: ", self.mse_loss.eval(feed_dict={self.x_m: test_xm.astype("float32"),
                                                 self.x_p: test_xp.astype("float32"),
                                                 self.u_m: test_um.astype("float32"),
                                                 self.u_p: test_up.astype("float32")})
+
+        print "vae training start"
 
         for i in range(self.epoch2):
             shuffle_index = np.arange(data_length)
@@ -309,57 +305,18 @@ class Dynamics_Model(object):
                                         self.u_m: um[batch_index].astype("float32"),
                                         self.u_p: up[batch_index].astype("float32")})
 
-            print self.mse_loss.eval(feed_dict={self.x_m: test_xm.astype("float32"),
+            print "epoch: ", i, "valid loss: ", self.mse_loss.eval(feed_dict={self.x_m: test_xm.astype("float32"),
                                                 self.x_p: test_xp.astype("float32"),
                                                 self.u_m: test_um.astype("float32"),
-                                                self.u_p: test_up.astype("float32")})
+                                                                           self.u_p: test_up.astype("float32"),           self.z: test_z.astype("float32")}), "vae_loss: ", self.vae_loss.eval(feed_dict={self.x_m: test_xm.astype("float32"),
+                                        self.x_p: test_xp.astype("float32"),
+                                        self.u_m: test_um.astype("float32"),
+                                        self.u_p: test_up.astype("float32")})
 
-        print loss
 
         saver = tf.train.Saver(self.variables)
-        saver.save(self.sess, "/tmp/vae_dynamics_small_init.model")
+        saver.save(self.sess, "/tmp/vae_dynamics.model")
         #saver.save(self.sess, "/tmp/vae_dynamics_test.model")
 
-        generated_xp = self.generator([0, test_xm, test_up, test_um, test_z])
-        error = np.sum((test_xp - generated_xp) ** 2)
-        print error
-        #print generated_xp
-        #print test_xp
-
         self.sess.close()
-
-        with tf.Session() as sess1:
-            init = tf.initialize_all_variables()
-            sess1.run(init)
-            generated_xp = self.generator([0, test_xm, test_up, test_um, test_z])
-            error = np.sum((test_xp - generated_xp) ** 2)
-            print error
-
-        with tf.Session() as sess1:
-            init = tf.initialize_all_variables()
-            sess1.run(init)
-            saver.restore(sess1, "/tmp/vae_dynamics_small_init.model")
-            generated_xp = self.generator([0, test_xm, test_up, test_um, test_z])
-            error = np.sum((test_xp - generated_xp) ** 2)
-            print error
-            print generated_xp
-            print test_xp
-
-        """
-        merged_summary_op = tf.summary.merge_all()
-        writer = tf.summary.FileWriter("log", self.sess.graph)
-
-        summary_str = self.sess.run(merged_summary_op, feed_dict={self.x_m: xm[batch_index].astype("float32"),
-                                                                  self.x_p: xp[batch_index].astype("float32"),
-                                                                  self.u_m: um[batch_index].astype("float32"),
-                                                                  self.u_p: up[batch_index].astype("float32")})
-        writer.add_summary(summary_str, 1)
-        """
-
-
-
-
-
-
-
 
