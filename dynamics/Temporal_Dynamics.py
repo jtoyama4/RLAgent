@@ -235,12 +235,12 @@ class Dynamics_Model(object):
         #save_model(self.vae, 'vae.hdf5')
         #save_model(self.generator, './dynamics/generator.hdf5')
 
-        test_xp = np.expand_dims(xp[10], 0)
-        test_xm = np.expand_dims(xm[10], 0)
-        test_up = np.expand_dims(up[10], 0)
-        test_um = np.expand_dims(um[10], 0)
+        test_xp = np.array(xp[:50])
+        test_xm = np.array(xm[:50])
+        test_up = np.array(up[:50])
+        test_um = np.array(um[:50])
 
-        test_z = np.random.normal(loc=0.0, scale=1.0, size=(1, self.z_dim)).astype("float32")
+        test_z = np.random.normal(loc=0.0, scale=1.0, size=(50, self.z_dim)).astype("float32")
 
         self.vae.fit([xp.astype("float32"), xm.astype("float32"), up.astype("float32"),
                       um.astype("float32")], xp.astype("float32"), epochs=epoch, validation_split=0.05, batch_size=100)
@@ -251,12 +251,12 @@ class Dynamics_Model(object):
         
         self.vae.fit([xp, xm, up, um], xp, epochs=epoch2, validation_split=0.05, batch_size=100)
 
-        save_model(self.generator, './dynamics/generator_try_more.hdf5')
+        save_model(self.generator, './dynamics/generator.hdf5')
 
         generated_xp = self.generator.predict([test_xm, test_up, test_um, test_z])
 
         #error = np.sum((test_xp.reshape(test_xp.shape[0], test_xp.shape[1]*test_xp.shape[2]) - generated_xp)**2)
-        error = np.sum((test_xp - generated_xp) ** 2)
+        error = np.mean((test_xp - generated_xp) ** 2)
         print error
         #print generated_xp
         #print test_xp

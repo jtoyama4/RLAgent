@@ -11,7 +11,7 @@ from keras.layers import AtrousConv1D as Atrous1d
 from keras import backend as K
 import argparse
 import gym
-from dynamics.Temporal_Dynamics_2 import Dynamics_Model
+
 from utils.smooth_torque import smooth_action
 
 def get_action(prev_action, bounds, action_dim):
@@ -19,7 +19,7 @@ def get_action(prev_action, bounds, action_dim):
     action = np.clip(action, bounds[0], bounds[1])
     return action
 
-def play(gym_mode, target=None):
+def play(gym_mode, target=None, one_step=False):
     BUFFER_SIZE = 100000
     GAMMA = 0.97
     TAU = 0.001
@@ -36,6 +36,11 @@ def play(gym_mode, target=None):
     MOTORS = [7, 8, 9, 10]
     EPOCH1 = 30
     EPOCH2 = 200
+
+    if one_step:
+        from dynamics.Temporal_Dynamics import Dynamics_Model
+    else:
+        from dynamics.Temporal_Dynamics_2 import Dynamics_Model
 
 
     np.random.seed(1234)
@@ -106,9 +111,11 @@ if __name__=='__main__':
     parser = argparse.ArgumentParser(description="")
     parser.add_argument('--gym', action='store_true', default=False)
     parser.add_argument('--target', default=None)
+    parser.add_argument('--one_step', action='store_true', default=False)
     args = parser.parse_args()
     gym_mode = args.gym
     log = open('log_ts.txt', 'w')
+    one_step = args.one_step
     if args.target:
         target = np.load(args.target)
     if gym_mode:
@@ -117,6 +124,6 @@ if __name__=='__main__':
         import rospy
 
         try:
-            play(gym_mode, target)
+            play(gym_mode, target, one_step)
         except rospy.ROSInterruptException:
             pass
