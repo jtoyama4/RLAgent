@@ -139,9 +139,10 @@ class Dynamics_Model(object):
                            output_shape=(self.H*2, self.state_dim+self.action_dim))([connected_u, connected_x])
 
             atrous_out = self.dilated_causal_conv(in_px, z)
-            connected_x = concatenate([connected_x, tf.stop_gradient(atrous_out)], axis=1)
-
             x_plus.append(atrous_out)
+            stopped_atrous = tf.stop_gradient(atrous_out)
+            connected_x = concatenate([connected_x, stopped_atrous], axis=1)
+
 
         x_plus = concatenate(x_plus, axis=1)
 
