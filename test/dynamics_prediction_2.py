@@ -13,9 +13,10 @@ from keras import backend as K
 import sys
 import os
 sys.path.append("./dynamics")
+sys.path.append("./utils")
 from generator import Generator
 import math
-
+from smooth_torque import smooth_action
 
 cur_dir = os.getcwd()
 
@@ -48,9 +49,10 @@ def sampling_trajectory(NUM_EPISODES):
         prev_action = 0.0
         tmp_a = []
         tmp_s = []
+        smooth_actions = smooth_action(100, [0.3, 0.2], 10)
         while not terminal:
             #env.render()
-            action = get_action(prev_action, ACTION_BOUND, ACTION_DIM)
+            action = smooth_actions[t]
             next_state, reward, terminal, _ = env.step(action)
 
             tmp_s.append(state)
@@ -98,7 +100,7 @@ def test(instance):
     
 
 def predict_trajectory(actions, states):
-    dynamics = Generator(ACTION_DIM, STATE_DIM, z_dim, H, "/tmp/vae_dynamics_small_init.model")
+    dynamics = Generator(ACTION_DIM, STATE_DIM, z_dim, H, "/tmp/vae_dynamics.model")
 
     log_like = 0.0
     count = 0
@@ -106,7 +108,9 @@ def predict_trajectory(actions, states):
     #test(dynamics)
 
     for state, action in zip(states, actions):
+        print "new trajectory"
         for i in range(len(action)-2*H):
+            i = i * H
             u_m = action[i: i+H]
             u_p = action[i+H: i+2*H]
             x_m = state[i: i+H]
@@ -126,18 +130,19 @@ def predict_trajectory(actions, states):
             sigma = np.var(samples, axis=0)
             true = state[i + H:i + 2 * H]
 
-            print "sigma", sigma[0]
-            print "mean", mean[0]
-            print "true", true[0]
+            #print "sigma", sigma[0]
+            #print "mean", mean[0]
+            #print "true", true[0]
             
-            tmp = calculate_likelihood([mean[:2], sigma[:2], true[:2]])
+            tmp = calculate_likelihood([mean, sigma, true])
 
             print tmp
 
             log_like += tmp
 
             count += 1
-            
+            if i + 2*H >= len(action):
+                break
     return log_like / count
 
 if __name__ == '__main__':
