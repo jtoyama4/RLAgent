@@ -38,10 +38,11 @@ def play(gym_mode, target=None, one_step=False):
     EPOCH2 = 200
 
     if one_step:
+        print "one_step"
         from dynamics.Temporal_Dynamics import Dynamics_Model
     else:
+        print "sequence step"
         from dynamics.Temporal_Dynamics_2 import Dynamics_Model
-
 
     np.random.seed(1234)
 

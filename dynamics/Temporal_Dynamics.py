@@ -20,7 +20,7 @@ from keras.utils.vis_utils import plot_model as plot
 
 
 class Dynamics_Model(object):
-    def __init__(self,action_dim, state_dim, z_dim, h_size, batch_size):
+    def __init__(self, action_dim, state_dim, z_dim, h_size, batch_size):
         self.action_dim = action_dim
         self.state_dim = state_dim
         self.z_dim = z_dim
