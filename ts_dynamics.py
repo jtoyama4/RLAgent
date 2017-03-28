@@ -117,10 +117,11 @@ if __name__=='__main__':
     gym_mode = args.gym
     log = open('log_ts.txt', 'w')
     one_step = args.one_step
+    print one_step
     if args.target:
         target = np.load(args.target)
     if gym_mode:
-        play(gym_mode)
+        play(gym_mode, one_step=one_step)
     else:
         import rospy
 

@@ -20,12 +20,13 @@ from keras.utils.vis_utils import plot_model as plot
 
 
 class Dynamics_Model(object):
-    def __init__(self, action_dim, state_dim, z_dim, h_size, batch_size):
+    def __init__(self, action_dim, state_dim, z_dim, h_size, batch_size, epoch_1=None, epoch_2=None):
         self.action_dim = action_dim
         self.state_dim = state_dim
         self.z_dim = z_dim
         self.H = h_size
         self.batch_size = batch_size
+        self.epoch1, self.epoch2 = epoch_1, epoch_2
         self.vae, self.generator, self.vae_loss = self.build_network()
 
         config = tf.ConfigProto(
@@ -185,7 +186,7 @@ class Dynamics_Model(object):
 
         return x*y
 
-    def learn(self, actions, states, epoch):
+    def learn(self, actions, states):
         n_traj = len(actions)
         print n_traj
 
@@ -243,13 +244,11 @@ class Dynamics_Model(object):
         test_z = np.random.normal(loc=0.0, scale=1.0, size=(50, self.z_dim)).astype("float32")
 
         self.vae.fit([xp.astype("float32"), xm.astype("float32"), up.astype("float32"),
-                      um.astype("float32")], xp.astype("float32"), epochs=epoch, validation_split=0.05, batch_size=100)
+                      um.astype("float32")], xp.astype("float32"), epochs=self.epoch1, validation_split=0.05, batch_size=100)
 
         self.vae.compile(optimizer="Adam", loss=self.vae_loss)
-
-        epoch2 = 100
         
-        self.vae.fit([xp, xm, up, um], xp, epochs=epoch2, validation_split=0.05, batch_size=100)
+        self.vae.fit([xp, xm, up, um], xp, epochs=self.epoch2, validation_split=0.05, batch_size=100)
 
         save_model(self.generator, './dynamics/generator.hdf5')
 
