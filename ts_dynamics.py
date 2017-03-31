@@ -24,7 +24,7 @@ def play(gym_mode, target=None, one_step=False):
     GAMMA = 0.97
     TAU = 0.001
     LEARNING_RATE = 0.001
-    NUM_EPISODES = 1000
+    NUM_EPISODES = 500
 
     INITIAL_REPLAY_SIZE = 100
     BATCH_SIZE = 100
@@ -34,15 +34,15 @@ def play(gym_mode, target=None, one_step=False):
     ITERATION = 1
     BATCH_BOOL = True
     MOTORS = [7, 8, 9, 10]
-    EPOCH1 = 30
-    EPOCH2 = 200
+    EPOCH1 = 20
+    EPOCH2 = 50
 
     if one_step:
         print "one_step"
         from dynamics.Temporal_Dynamics import Dynamics_Model
     else:
         print "sequence step"
-        from dynamics.Temporal_Dynamics_2 import Dynamics_Model
+        from dynamics.Temporal_Dynamics_3 import Dynamics_Model
 
     np.random.seed(1234)
 
