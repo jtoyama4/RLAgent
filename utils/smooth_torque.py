@@ -51,13 +51,17 @@ def smooth_action(seq_len, action_bound, first_zero):
 
     return action
 
-def gaussian_action(seq_len, action_bound, first_zero):
-    sigma = action_bound[0] / 3.5
-    print sigma
-    randoms = np.random.normal(0.0,sigma, size=(seq_len-first_zero))
-    b = gf(randoms, 1.0)
-    print b
-
+def gaussian_action(seq_len, action_bounds, first_zero):
+    zeros = np.zeros((first_zero, 2))
+    actions = np.random.normal(0.0, 1.0, size=(seq_len-first_zero, 2))
+    b = gf(np.array(actions), 10.0, axis=0)
+    bias = -b[0]
+    b += bias
+    ret = np.concatenate((zeros, b), axis=0)
+    seq = np.arange(100)
+    #plt.plot(seq, ret)
+    #plt.show()
+    return ret
 
 if __name__ == "__main__":
     a = gaussian_action(100, [0.5, 0.1], 10)
