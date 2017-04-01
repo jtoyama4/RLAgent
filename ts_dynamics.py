@@ -12,7 +12,7 @@ from keras import backend as K
 import argparse
 import gym
 
-from utils.smooth_torque import smooth_action
+from utils.smooth_torque import gaussian_action
 
 def get_action(prev_action, bounds, action_dim):
     action = prev_action + np.random.normal(size=(action_dim,)) * 0.1
@@ -81,8 +81,7 @@ def play(gym_mode, target=None, one_step=False, epochs=(30,75)):
 
         tmp_a = []
         tmp_s = []
-        smooth_actions = smooth_action(100, [0.3, 0.2], 10)
-        
+        smooth_actions = gaussian_action(100, [0.3, 0.2], 10)
         while not terminal:
             #env.render()
             action = smooth_actions[t]
