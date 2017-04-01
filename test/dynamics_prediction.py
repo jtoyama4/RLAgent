@@ -8,6 +8,7 @@ from keras.models import load_model
 from keras import backend as K
 import math
 import os
+sys.path.append("./dynamics")
 sys.path.append("./utils")
 from smooth_torque import smooth_action
 
@@ -75,8 +76,6 @@ def gated_activation(t):
 
 def calculate_likelihood(t):
     mus, sigmas, xs = t
-    #print mus
-    #print xs
     log_like = 0
     
     for mu, sigma, x in zip(mus, sigmas, xs):
@@ -112,22 +111,22 @@ def predict_trajectory(actions, states):
         one_log = 0.0
         for i in range(len(action)-2*H):
             u_m = action[i: i+H]
-            u_p = action[i+H: i+2*H]
+            #u_p = action[i+H: i+2*H]
             x_m = state[i: i+H]
             #print x_m[:3]
 
             u_m = np.expand_dims(u_m, 0)
-            u_p = np.expand_dims(u_p, 0)
+            #u_p = np.expand_dims(u_p, 0)
             x_m = np.expand_dims(x_m, 0)
 
             samples = []
             for _ in xrange(30):
                 z = np.random.normal(loc=0.0, scale=1.0, size=(1, z_dim))
-                pred_state = generative_model.predict([x_m, u_p, u_m, z])[0]
+                pred_state = generative_model.predict([x_m, u_m, z])[0]
                 samples.append(pred_state)
             #print "sample", samples[:3]
-            mean = np.mean(samples, axis=0)[0]
-            sigma = np.var(samples, axis=0)[0]
+            mean = np.mean(samples, axis=0)
+            sigma = np.var(samples, axis=0)
             true = state[i+H]
             tmp = calculate_likelihood([np.expand_dims(mean,0), np.expand_dims(sigma,0), np.expand_dims(true,0)])
             print "mean: ", mean

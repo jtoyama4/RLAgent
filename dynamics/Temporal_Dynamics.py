@@ -45,7 +45,7 @@ class Dynamics_Model(object):
     def build_network(self):
         x_plus_ph = Input(shape=[self.H, self.state_dim], name="x_plus")
         x_m = Input(shape=[self.H, self.state_dim], name="x_min")
-        u_plus = Input(shape=[self.H, self.action_dim], name="u_plus")
+        #u_plus = Input(shape=[self.H, self.action_dim], name="u_plus")
         u_m = Input(shape=[self.H, self.action_dim], name="u_min")
 
         #encoder
@@ -94,9 +94,9 @@ class Dynamics_Model(object):
 
         lambda3 = Lambda(self.gated_activation, name='gate_3')
 
-        last = Conv1d(self.H*self.state_dim, 1, name='last_layer')
+        last = Conv1d(self.state_dim, 1, name='last_layer')
 
-        in_px = concatenate([x_m, u_plus, u_m], -1)
+        in_px = concatenate([x_m, u_m], -1)
         #in_px = Lambda(lambda x: K.concatenate, name="concat")([x_m, u_plus, u_m])
         
         xx1 = x_layer_1(in_px)
@@ -127,9 +127,9 @@ class Dynamics_Model(object):
 
         print atrous_out.shape
 
-        x_plus = Reshape((self.H, self.state_dim))(atrous_out)
+        x_plus = Reshape((self.state_dim,))(atrous_out)
 
-        vae = Model([x_plus_ph, x_m, u_plus, u_m], x_plus)
+        vae = Model([x_plus_ph, x_m, u_m], x_plus)
 
         def vae_loss(x_original, x_generated):
             square_loss = K.mean((x_original - x_generated)**2)
@@ -172,9 +172,9 @@ class Dynamics_Model(object):
 
         g_out = last(g_out)
 
-        g_out = Reshape((self.H, self.state_dim))(g_out)
+        g_out = Reshape((self.state_dim,))(g_out)
 
-        generator = Model([x_m, u_plus, u_m, sampled_z], g_out)
+        generator = Model([x_m, u_m, sampled_z], g_out)
 
         return vae, generator, vae_loss
 
@@ -189,19 +189,18 @@ class Dynamics_Model(object):
     def learn(self, actions, states):
         n_traj = len(actions)
         print n_traj
-
-        action_zeros = np.zeros((self.H-1, self.action_dim))
-        state_zeros = np.zeros((self.H-1, self.state_dim))
-        train_xp = []
         train_xm = []
         train_up = []
         train_um = []
+        train_xt = []
+        train_xp = []
 
         for n in xrange(n_traj):
             action = np.array(actions[n]).astype("float32")
             state = np.array(states[n]).astype("float32")
             for i in xrange(len(action) - 2*self.H):
                 x_p = state[i + self.H: i + 2 * self.H]
+                x_t = state[i + self.H]
                 x_m = state[i: i+self.H]
                 u_p = action[i + self.H: i + 2 * self.H]
                 u_m = action[i: i+self.H]
@@ -209,11 +208,13 @@ class Dynamics_Model(object):
                 train_xm.append(x_m)
                 train_up.append(u_p)
                 train_um.append(u_m)
+                train_xt.append(x_t)
 
         xp = np.stack(train_xp)
         xm = np.stack(train_xm)
         up = np.stack(train_up)
         um = np.stack(train_um)
+        xt = np.stack(train_xt)
 
         print xp.shape
         print xp[3]
@@ -236,26 +237,26 @@ class Dynamics_Model(object):
         #save_model(self.vae, 'vae.hdf5')
         #save_model(self.generator, './dynamics/generator.hdf5')
 
-        test_xp = np.array(xp[:50])
+        test_xt = np.array(xt[:50])
         test_xm = np.array(xm[:50])
         test_up = np.array(up[:50])
         test_um = np.array(um[:50])
 
         test_z = np.random.normal(loc=0.0, scale=1.0, size=(50, self.z_dim)).astype("float32")
 
-        self.vae.fit([xp.astype("float32"), xm.astype("float32"), up.astype("float32"),
-                      um.astype("float32")], xp.astype("float32"), epochs=self.epoch1, validation_split=0.05, batch_size=100)
+        self.vae.fit([xp.astype("float32"), xm.astype("float32"),
+                      um.astype("float32")], xt.astype("float32"), epochs=self.epoch1, validation_split=0.05, batch_size=32)
 
         self.vae.compile(optimizer="Adam", loss=self.vae_loss)
         
-        self.vae.fit([xp, xm, up, um], xp, epochs=self.epoch2, validation_split=0.05, batch_size=100)
+        self.vae.fit([xp, xm, um], xt, epochs=self.epoch2, validation_split=0.05, batch_size=32)
 
         save_model(self.generator, './dynamics/generator.hdf5')
 
-        generated_xp = self.generator.predict([test_xm, test_up, test_um, test_z])
+        generated_x = self.generator.predict([test_xm, test_um, test_z])
 
         #error = np.sum((test_xp.reshape(test_xp.shape[0], test_xp.shape[1]*test_xp.shape[2]) - generated_xp)**2)
-        error = np.mean((test_xp - generated_xp) ** 2)
+        error = np.mean((test_xt - generated_x) ** 2)
         print error
         #print generated_xp
         #print test_xp

@@ -19,7 +19,7 @@ def get_action(prev_action, bounds, action_dim):
     action = np.clip(action, bounds[0], bounds[1])
     return action
 
-def play(gym_mode, target=None, one_step=False):
+def play(gym_mode, target=None, one_step=False, epochs=(30,75)):
     BUFFER_SIZE = 100000
     GAMMA = 0.97
     TAU = 0.001
@@ -27,22 +27,23 @@ def play(gym_mode, target=None, one_step=False):
     NUM_EPISODES = 1000
 
     INITIAL_REPLAY_SIZE = 100
-    BATCH_SIZE = 100
+    BATCH_SIZE = 30
     Z_DIM=8
     H_SIZE=10
     NOISE_SCALE = 0.5
     ITERATION = 1
     BATCH_BOOL = True
     MOTORS = [7, 8, 9, 10]
-    EPOCH1 = 1
-    EPOCH2 = 30
+    EPOCH1 = epochs[0]
+    EPOCH2 = epochs[1]
+
 
     if one_step:
         print "one_step"
         from dynamics.Temporal_Dynamics import Dynamics_Model
     else:
         print "sequence step"
-        from dynamics.Temporal_Dynamics_2 import Dynamics_Model
+        from dynamics.Temporal_Dynamics_3 import Dynamics_Model
 
     np.random.seed(1234)
 
@@ -113,10 +114,12 @@ if __name__=='__main__':
     parser.add_argument('--gym', action='store_true', default=False)
     parser.add_argument('--target', default=None)
     parser.add_argument('--one_step', action='store_true', default=False)
+    parser.add_argument('--epochs', default=None)
     args = parser.parse_args()
     gym_mode = args.gym
     log = open('log_ts.txt', 'w')
     one_step = args.one_step
+    epochs = args.epochs
     print one_step
     if args.target:
         target = np.load(args.target)

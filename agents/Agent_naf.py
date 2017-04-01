@@ -117,7 +117,7 @@ class Agent(object):
 
     def _P(self, x):
         if self.action_dim == 1:
-            return x**2
+            return x**2ex
         else:
             return K.batch_dot(x, K.permute_dimensions(x, (0,2,1)))
 

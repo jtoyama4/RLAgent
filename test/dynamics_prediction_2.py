@@ -87,7 +87,7 @@ def calculate_likelihood(t):
             #print "%d:%f" % (c,tmp)
             c += 1
     #like = (1.0 / K.sqrt(2.0 * math.pi * sigma)) * K.exp(-0.5 * (x-mu)**2 / sigma)
-    return log_like
+    return log_like / c
 
 
 
@@ -103,13 +103,14 @@ def test(instance):
     sys.exit()
     
 
-def predict_trajectory(actions, states, steps):
-    dynamics = Generator(ACTION_DIM, STATE_DIM, z_dim, H, "/tmp/vae_dynamics.model")
 
+def predict_trajectory(actions, states, steps):
+    dynamics = Generator(ACTION_DIM, STATE_DIM, z_dim, H, "/tmp/vae_dynamics_3.model")
     log_like = 0.0
     count = 0
 
     #test(dynamics)
+    #pred_all = True
 
     for state, action in zip(states, actions):
         print "new trajectory"
@@ -126,7 +127,7 @@ def predict_trajectory(actions, states, steps):
                 x_m = np.expand_dims(x_m, 0)
                 
                 samples = []
-                for _ in xrange(20):
+                for _ in xrange(300):
                     z = np.random.normal(loc=0.0, scale=1.0, size=(1, z_dim))
                     pred_state = dynamics.predict(x_m, u_p, u_m, z)[0]
                     samples.append(pred_state)
@@ -144,8 +145,8 @@ def predict_trajectory(actions, states, steps):
             
                 tmp = calculate_likelihood([mean, sigma, true])
 
-                print tmp, np.mean(u_m[0], axis=0), np.mean(u_p[0], axis=0)
-
+                print tmp
+ 
                 log_like += tmp
 
                 count += 1
@@ -163,7 +164,7 @@ def predict_trajectory(actions, states, steps):
                 x_m = np.expand_dims(x_m, 0)
                 
                 samples = []
-                for _ in xrange(20):
+                for _ in xrange(100):
                     z = np.random.normal(loc=0.0, scale=1.0, size=(1, z_dim))
                     pred_state = dynamics.predict(x_m, u_p, u_m, z)[0]
                     samples.append(pred_state)
@@ -177,13 +178,10 @@ def predict_trajectory(actions, states, steps):
                 
                 #print "mean", mean[0]
                 #print "true", true[0]
-            
                 tmp = calculate_likelihood([mean, sigma, true])
 
-                print tmp, np.mean(u_m[0], axis=0), np.mean(u_p[0], axis=0)
-
+                print tmp
                 log_like += tmp
-
                 count += 1
 
     return log_like / count
@@ -195,7 +193,4 @@ if __name__ == '__main__':
     steps = args.steps
     actions, states = sampling_trajectory(3)
     log_likelihood = predict_trajectory(actions, states, steps)
-    print log_likelihood
-
-
 
