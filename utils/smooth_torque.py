@@ -53,7 +53,7 @@ def smooth_action(seq_len, action_bound, first_zero):
 
 def gaussian_action(seq_len, action_bounds, first_zero):
     zeros = np.zeros((first_zero, 2))
-    actions = np.random.normal(0.0, 0.2, size=(seq_len-first_zero, 2))
+    actions = np.random.normal(0.0, 0.1, size=(seq_len-first_zero, 2))
     b = gf(np.array(actions), 10.0, order=0 , axis=0)
     bias = -b[0]
     b += bias
