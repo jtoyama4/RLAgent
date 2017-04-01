@@ -227,7 +227,13 @@ class Dynamics_Model(object):
             #state = np.concatenate([state_zeros, np.array(states[n])], axis=0)
             action = np.array(actions[n])
             state = np.array(states[n])
-            for i in xrange(len(action) - 2*self.H):
+            #for i in xrange(len(action) - 2*self.H):
+            for i in xrange(len(action)/self.H - 2):
+                i = i*self.H
+                #x_p = state[i + self.H: i + 2 * self.H]
+                #x_m = state[i: i+self.H]
+                #u_p = action[i + self.H: i + 2 * self.H]
+                #u_m = action[i: i+self.H]
                 x_p = state[i + self.H: i + 2 * self.H]
                 x_m = state[i: i+self.H]
                 u_p = action[i + self.H: i + 2 * self.H]

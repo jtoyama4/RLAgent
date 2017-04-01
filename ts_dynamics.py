@@ -34,8 +34,8 @@ def play(gym_mode, target=None, one_step=False):
     ITERATION = 1
     BATCH_BOOL = True
     MOTORS = [7, 8, 9, 10]
-    EPOCH1 = 20
-    EPOCH2 = 50
+    EPOCH1 = 50
+    EPOCH2 = 150
 
     if one_step:
         print "one_step"

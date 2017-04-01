@@ -2,6 +2,8 @@
 
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.ndimage.filters import gaussian_filter1d as gf
+
 
 def smooth_action(seq_len, action_bound, first_zero):
     action_bound = np.array(action_bound)
@@ -49,6 +51,14 @@ def smooth_action(seq_len, action_bound, first_zero):
 
     return action
 
+def gaussian_action(seq_len, action_bound, first_zero):
+    sigma = action_bound[0] / 3.5
+    print sigma
+    randoms = np.random.normal(0.0,sigma, size=(seq_len-first_zero))
+    b = gf(randoms, 1.0)
+    print b
+
+
 if __name__ == "__main__":
-    a = smooth_action(100, [0.5, 0.1], 10)
+    a = gaussian_action(100, [0.5, 0.1], 10)
 
