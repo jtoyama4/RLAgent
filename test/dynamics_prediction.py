@@ -1,5 +1,6 @@
 #coding: utf-8
 
+import sys
 import numpy as np
 from keras.models import Model
 import gym
@@ -7,6 +8,8 @@ from keras.models import load_model
 from keras import backend as K
 import math
 import os
+sys.path.append("./utils")
+from smooth_torque import smooth_action
 
 cur_dir = os.getcwd()
 
@@ -41,12 +44,10 @@ def sampling_trajectory(NUM_EPISODES):
         prev_action = [0.0 for _ in xrange(ACTION_DIM)]
         tmp_a = []
         tmp_s = []
+        smooth_actions = smooth_action(100, [0.3, 0.2], 10)
         while not terminal:
             #env.render()
-            if t < 10:
-                action = prev_action
-            else:
-                action = get_action(prev_action, ACTION_BOUND, ACTION_DIM)
+            action = smooth_actions[t]
             next_state, reward, terminal, _ = env.step(action)
 
             tmp_s.append(state)
@@ -81,6 +82,7 @@ def calculate_likelihood(t):
     for mu, sigma, x in zip(mus, sigmas, xs):
         c=0
         for m, s, x_elem in zip(mu, sigma, x):
+            s = np.sqrt(s)
             tmp = -0.5 * math.log(2*math.pi) - 0.5 * math.log(s) - (x_elem-m)**2 / (2.0*s)
             log_like += tmp
             #print "%d:%f" % (c,tmp)
@@ -90,7 +92,7 @@ def calculate_likelihood(t):
 
 
 def predict_trajectory(actions, states):
-    generative_model = load_model('%s/dynamics/generator_try_more.hdf5'% cur_dir,
+    generative_model = load_model('%s/dynamics/generator.hdf5'% cur_dir,
                                   custom_objects={"gated_activation":gated_activation})
 
     #state_zeros = np.zeros((H-1, STATE_DIM))
@@ -128,8 +130,11 @@ def predict_trajectory(actions, states):
             sigma = np.var(samples, axis=0)[0]
             true = state[i+H]
             tmp = calculate_likelihood([np.expand_dims(mean,0), np.expand_dims(sigma,0), np.expand_dims(true,0)])
+            print "mean: ", mean
+            print "true; ", true
+            print "sigma: ", sigma
 
-            print np.sum((mean-true)**2)
+            print np.mean((mean-true)**2)
             
             #mean = np.mean(samples, axis=0)
             #sigma = np.var(samples, axis=0)

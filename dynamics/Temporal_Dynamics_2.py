@@ -137,15 +137,17 @@ class Dynamics_Model(object):
         for idx in xrange(self.H):
             arg = {"ix": idx}
             in_px = Lambda(slicing, arguments=arg, name='slicing_lambda',
-                           output_shape=(self.H*2, self.state_dim+self.action_dim))([connected_u, connected_x])
+                           output_shape=(self.H, self.state_dim+self.action_dim))([connected_u, connected_x])
 
             atrous_out = self.dilated_causal_conv(in_px, z)
 
             x_plus.append(atrous_out)
             if self.stop_grad:
+                print "stop grad"
                 stopped_atrous = tf.stop_gradient(atrous_out)
                 connected_x = concatenate([connected_x, stopped_atrous], axis=1)
             else:
+                print "use grad"
                 connected_x = concatenate([connected_x, atrous_out], axis=1)
 
         x_plus = concatenate(x_plus, axis=1)
@@ -268,10 +270,16 @@ class Dynamics_Model(object):
         #save_model(self.vae, 'vae.hdf5')
         #save_model(self.generator, './dynamics/generator.hdf5')
 
-        test_xp = np.array(xp[:50])
-        test_xm = np.array(xm[:50])
-        test_up = np.array(up[:50])
-        test_um = np.array(um[:50])
+        xp = np.array(xp[100:])
+        xm = np.array(xm[100:])
+        up = np.array(up[100:])
+        um = np.array(um[100:])
+
+        
+        test_xp = np.array(xp[:100])
+        test_xm = np.array(xm[:100])
+        test_up = np.array(up[:100])
+        test_um = np.array(um[:100])
 
         np.save("/tmp/test_xp.npy", test_xp)
         np.save("/tmp/test_xm.npy", test_xm)
@@ -319,7 +327,12 @@ class Dynamics_Model(object):
 
 
         saver = tf.train.Saver(self.variables)
-        saver.save(self.sess, "/tmp/vae_dynamics.model")
+        if self.stop_grad:
+            print "save stop_grad model"
+            saver.save(self.sess, "/tmp/vae_dynamics_stop_grad.model")
+        else:
+            print "save grad model"
+            saver.save(self.sess, "/tmp/vae_dynamics.model")
         #saver.save(self.sess, "/tmp/vae_dynamics_test.model")
 
         self.sess.close()

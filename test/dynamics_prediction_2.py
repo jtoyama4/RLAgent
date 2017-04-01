@@ -12,8 +12,11 @@ from keras.layers.core import Flatten, Dense, Reshape
 from keras import backend as K
 import sys
 import os
+import argparse
 sys.path.append("./dynamics")
 sys.path.append("./utils")
+
+
 from generator import Generator
 import math
 from smooth_torque import smooth_action
@@ -78,6 +81,7 @@ def calculate_likelihood(t):
     for mu, sigma, x in zip(mus, sigmas, xs):
         c=0
         for m, s, x_elem in zip(mu, sigma, x):
+            #s = np.sqrt(s)
             tmp = -0.5 * math.log(2*math.pi) - 0.5 * math.log(s) - (x_elem-m)**2 / (2.0*s)
             log_like += tmp
             #print "%d:%f" % (c,tmp)
@@ -99,7 +103,7 @@ def test(instance):
     sys.exit()
     
 
-def predict_trajectory(actions, states):
+def predict_trajectory(actions, states, steps):
     dynamics = Generator(ACTION_DIM, STATE_DIM, z_dim, H, "/tmp/vae_dynamics.model")
 
     log_like = 0.0
@@ -109,45 +113,88 @@ def predict_trajectory(actions, states):
 
     for state, action in zip(states, actions):
         print "new trajectory"
-        for i in range(len(action)-2*H):
-            i = i * H
-            u_m = action[i: i+H]
-            u_p = action[i+H: i+2*H]
-            x_m = state[i: i+H]
-            #print x_m[:3]
+        if steps:
+            for i in range(len(action)-2*H):
+                i = i * H
+                u_m = action[i: i+H]
+                u_p = action[i+H: i+2*H]
+                x_m = state[i: i+H]
+                #print x_m[:3]
 
-            u_m = np.expand_dims(u_m, 0)
-            u_p = np.expand_dims(u_p, 0)
-            x_m = np.expand_dims(x_m, 0)
-
-            samples = []
-            for _ in xrange(20):
-                z = np.random.normal(loc=0.0, scale=1.0, size=(1, z_dim))
-                pred_state = dynamics.predict(x_m, u_p, u_m, z)[0]
-                samples.append(pred_state)
-            #print "sample", samples[:3]
-            mean = np.mean(samples, axis=0)
-            sigma = np.var(samples, axis=0)
-            true = state[i + H:i + 2 * H]
-
-            #print "sigma", sigma[0]
-            #print "mean", mean[0]
-            #print "true", true[0]
+                u_m = np.expand_dims(u_m, 0)
+                u_p = np.expand_dims(u_p, 0)
+                x_m = np.expand_dims(x_m, 0)
+                
+                samples = []
+                for _ in xrange(20):
+                    z = np.random.normal(loc=0.0, scale=1.0, size=(1, z_dim))
+                    pred_state = dynamics.predict(x_m, u_p, u_m, z)[0]
+                    samples.append(pred_state)
+                samples = np.array(samples)
+                print samples.shape
+                print "sample", samples[:,1,1]
+                print np.var(samples[:,1,1])
+                mean = np.mean(samples, axis=0)
+                sigma = np.var(samples, axis=0)
+                true = state[i + H:i + 2 * H]
+                
+                print "sigma", sigma[1,1]
+                #print "mean", mean[0]
+                #print "true", true[0]
             
-            tmp = calculate_likelihood([mean, sigma, true])
+                tmp = calculate_likelihood([mean, sigma, true])
 
-            print tmp, np.mean(u_m[0], axis=0), np.mean(u_p[0], axis=0)
+                print tmp, np.mean(u_m[0], axis=0), np.mean(u_p[0], axis=0)
 
-            log_like += tmp
+                log_like += tmp
 
-            count += 1
-            if i + 2*H >= len(action):
-                break
+                count += 1
+                if i + 2*H >= len(action):
+                    break
+        else:
+            for i in range(len(action)-2*H):
+                u_m = action[i: i+H]
+                u_p = action[i+H: i+2*H]
+                x_m = state[i: i+H]
+                #print x_m[:3]
+
+                u_m = np.expand_dims(u_m, 0)
+                u_p = np.expand_dims(u_p, 0)
+                x_m = np.expand_dims(x_m, 0)
+                
+                samples = []
+                for _ in xrange(20):
+                    z = np.random.normal(loc=0.0, scale=1.0, size=(1, z_dim))
+                    pred_state = dynamics.predict(x_m, u_p, u_m, z)[0]
+                    samples.append(pred_state)
+                samples = np.array(samples)
+                #print samples.shape
+                #print "sample", samples[:,1,1]
+                #print np.var(samples[:,1,1])
+                mean = np.expand_dims(np.mean(samples, axis=0)[0], 0)
+                sigma = np.expand_dims(np.var(samples, axis=0)[0], 0)
+                true = np.expand_dims(state[i+H], 0)
+                
+                #print "mean", mean[0]
+                #print "true", true[0]
+            
+                tmp = calculate_likelihood([mean, sigma, true])
+
+                print tmp, np.mean(u_m[0], axis=0), np.mean(u_p[0], axis=0)
+
+                log_like += tmp
+
+                count += 1
+
     return log_like / count
 
 if __name__ == '__main__':
+    parser = argparse.ArgumentParser(description="")
+    parser.add_argument('--steps', action='store_true', default=False)
+    args = parser.parse_args()
+    steps = args.steps
     actions, states = sampling_trajectory(3)
-    log_likelihood = predict_trajectory(actions, states)
+    log_likelihood = predict_trajectory(actions, states, steps)
     print log_likelihood
 
 
