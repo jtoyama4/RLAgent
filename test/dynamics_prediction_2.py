@@ -19,7 +19,7 @@ sys.path.append("./utils")
 
 from generator import Generator
 import math
-from smooth_torque import smooth_action
+from smooth_torque import smooth_action, gaussian_action
 
 cur_dir = os.getcwd()
 
@@ -52,7 +52,7 @@ def sampling_trajectory(NUM_EPISODES):
         prev_action = 0.0
         tmp_a = []
         tmp_s = []
-        smooth_actions = smooth_action(100, [0.3, 0.2], 10)
+        smooth_actions = gaussian_action(100, [0.3, 0.2], 10)
         while not terminal:
             #env.render()
             action = smooth_actions[t]
